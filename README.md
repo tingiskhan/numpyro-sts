@@ -4,4 +4,4 @@ This library adds some utility distributions for working with structural timeser
 
 ## Disclaimer
 
-Note that the library is not in any way affiliated with the numpyro developers, merely an extension.
+Note that the library is not in any way affiliated with the numpyro package or developers.
