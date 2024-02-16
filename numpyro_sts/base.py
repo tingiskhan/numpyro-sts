@@ -23,7 +23,6 @@ def _loc_transition(state, offset, matrix) -> jnp.ndarray:
     return offset + (matrix @ state[..., None]).reshape(state.shape)
 
 
-# TODO: Make it so that if you pass mask, the shock sampling is handled automatically
 class LinearTimeseries(Distribution):
     r"""
     Defines a base model for linear stochastic models with Gaussian increments.
@@ -139,8 +138,7 @@ class LinearTimeseries(Distribution):
 
     @validate_sample
     def log_prob(self, value):
-        # TODO: Consider passing initial distribution instead of value as this is kinda tricky...
-        # NB: Note that sending initial distribution will also be tricky for an AR process as well...
+        # NB: very similar to numpyro's implementation of EulerMaruyama
         sample_shape = jnp.broadcast_shapes(value.shape[: -self.event_dim], self.batch_shape)
         value = jnp.broadcast_to(value, sample_shape + self.event_shape)
 
@@ -176,7 +174,6 @@ class LinearTimeseries(Distribution):
 
             x_t = x_t[..., self._column_mask]
 
-        # NB: Could also use event shapes
         if not self._std_is_matrix:
             dist = Normal(loc, std).to_event(1)
         else:
