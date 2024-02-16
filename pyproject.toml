@@ -44,6 +44,13 @@ homepage = "https://github.com/tingiskhan/numpyro-sts"
 [tool.black]
 line-length = 120
 
+[tool.ruff]
+line-length = 120
+exclude = ["__init__.py"]
+
+[tool.isort]
+profile = "black"
+
 [tool.setuptools.packages.find]
 include = ["numpyro_sts*"]
 
