@@ -97,12 +97,12 @@ class LinearTimeseries(Distribution):
             cols_to_sample = mask.sum(axis=-1)
 
         self._column_mask = mask
-        self._sample_shape = times.shape + (cols_to_sample,)
+        self._shock_shape = times.shape + (cols_to_sample,)
 
         super().__init__(batch_shape=batch_shape, event_shape=event_shape, validate_args=validate_args)
 
     def _sample_shocks(self, key, batch_shape) -> jnp.ndarray:
-        samples = normal(key, shape=batch_shape + self._sample_shape)
+        samples = normal(key, shape=batch_shape + self._shock_shape)
 
         if self._column_mask is None:
             return samples
