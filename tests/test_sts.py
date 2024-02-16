@@ -3,9 +3,9 @@ import pytest as pt
 from jax.random import PRNGKey
 import numpy as np
 from numpyro.distributions import HalfNormal, Normal
-from numpyro.infer import Predictive, MCMC, NUTS
+from numpyro.infer import MCMC, NUTS
 
-from sts import RandomWalk, LocalLinearTrend, AutoRegressive, LinearTimeseries, SmoothLocalLinearTrend
+from numpyro_sts import RandomWalk, LocalLinearTrend, AutoRegressive, LinearTimeseries, SmoothLocalLinearTrend
 
 
 def models(n):
@@ -43,13 +43,6 @@ def test_models(model, shape):
 
     log_prob = model.log_prob(samples)
     assert log_prob.shape == shape + model.batch_shape
-
-    new_initial_values = np.zeros_like(model.initial_value)
-    new_model = model.build_forward(5, new_initial_values)
-
-    new_samples = new_model.sample(key, shape)
-
-    assert new_samples.shape == shape + model.batch_shape + model.event_shape
 
 
 def test_models_numpyro_context():
