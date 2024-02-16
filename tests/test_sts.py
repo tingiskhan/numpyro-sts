@@ -27,6 +27,12 @@ def models(n):
         yield LinearTimeseries(n, offset, mat, std_mat, np.zeros_like(std_mat), mask=mask).expand(b)
         yield SmoothLocalLinearTrend(n, 0.01, np.zeros(2)).expand(b)
 
+        mat = np.eye(2)
+        std_mat = 0.05 * np.eye(2)
+        offset = np.zeros(2)
+
+        yield LinearTimeseries(n, offset, mat, std_mat, offset, std_is_matrix=True).expand(b)
+
     yield RandomWalk(n, np.full(10, 0.05), 0.0, validate_args=True)
 
 
