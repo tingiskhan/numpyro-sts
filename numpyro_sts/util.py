@@ -1,4 +1,4 @@
-from typing import Sequence, Any, Generator
+from typing import Any, Generator
 
 import jax.numpy as np
 

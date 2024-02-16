@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import numpy as np
 
-from .base import LinearTimeseries, ArrayLike
+from .base import ArrayLike, LinearTimeseries
 from .util import cast_to_tensor
 
 

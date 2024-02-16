@@ -1,12 +1,12 @@
 from numbers import Number
 from typing import Union
 
-from jax import vmap
-from numpyro.contrib.control_flow import scan
-from numpyro.distributions import Distribution, constraints, Normal
-from jax.random import normal
 import jax.numpy as jnp
 import numpy as np
+from jax import vmap
+from jax.random import normal
+from numpyro.contrib.control_flow import scan
+from numpyro.distributions import Distribution, Normal, constraints
 from numpyro.distributions.util import validate_sample
 
 ArrayLike = Union[jnp.ndarray, Number, np.ndarray]
