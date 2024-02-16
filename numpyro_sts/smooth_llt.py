@@ -15,15 +15,12 @@ class SmoothLocalLinearTrend(LinearTimeseries):
     """
 
     def __init__(self, n: int, std: ArrayLike, initial_value: ArrayLike, **kwargs):
-        initial_value, = promote_shapes(initial_value, shape=(2,))
+        (initial_value,) = promote_shapes(initial_value, shape=(2,))
 
-        std, = promote_shapes(std, shape=(1,))
+        (std,) = promote_shapes(std, shape=(1,))
         std = jnp.concatenate([jnp.zeros_like(std), std], axis=-1)
 
-        matrix = jnp.array([
-            [1.0, 1.0],
-            [0.0, 1.0]
-        ])
+        matrix = jnp.array([[1.0, 1.0], [0.0, 1.0]])
         offset = jnp.zeros_like(initial_value)
 
         mask = np.array([False, True])

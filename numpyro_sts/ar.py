@@ -18,7 +18,7 @@ class AutoRegressive(LinearTimeseries):
         order: int,
         mu: ArrayLike = None,
         initial_value: ArrayLike = None,
-        **kwargs
+        **kwargs,
     ):
         std, phi, mu = cast_to_tensor(std, phi, mu if mu is not None else jnp.zeros_like(std))
 
@@ -37,9 +37,7 @@ class AutoRegressive(LinearTimeseries):
             offset = jnp.concatenate([offset, zeros], axis=-1)
             std = jnp.concatenate([std, zeros], axis=-1)
 
-        init = jnp.reshape(
-            initial_value if initial_value is not None else jnp.zeros(order), batch_shape + (order,)
-        )
+        init = jnp.reshape(initial_value if initial_value is not None else jnp.zeros(order), batch_shape + (order,))
 
         mask = np.array([True] + (order - 1) * [False], dtype=jnp.bool_)
 

@@ -32,7 +32,7 @@ def sample_stationary_gaussian(key: PRNGKey, covariances: np.ndarray, num_sample
 
     gaussians = normal(key, shape=shape)
 
-    sqrt_diag = lambdas ** 0.5
+    sqrt_diag = lambdas**0.5
     intermediary = sqrt_diag * np.fft.ifft(gaussians).real
 
     return np.fft.fft(intermediary, n=covariances.shape[-1]).real
