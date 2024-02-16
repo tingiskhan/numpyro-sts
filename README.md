@@ -1,6 +1,6 @@
 # numpyro-sts
 
-This library adds some utlity distributions for working with structural timeseries in numpyro.
+This library adds some utility distributions for working with structural timeseries in numpyro.
 
 ## Disclaimer
 
