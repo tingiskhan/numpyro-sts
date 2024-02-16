@@ -5,6 +5,9 @@ lint:
 	ruff check ./numpyro_sts
 
 test:
-	pytest ./tests
+	coverage run -m pytest ./tests
+
+coverage: test
+	coverage report --fail-under=100
 
 # TODO: add coverage
