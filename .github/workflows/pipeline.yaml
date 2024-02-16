@@ -19,15 +19,25 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - uses: conda-incubator/setup-miniconda@v2
+      with:
+        auto-update-conda: true
+        python-version: ${{ matrix.python-version }}
+        activate-environment: test
+        auto-activate-base: false
     - name: Install dependencies
+      shell: bash -l {0}
       run: |                
         pip install ".[dev]"
     - name: Format
+      shell: bash -l {0}
       run: |
         make format
     - name: Lint
+      shell: bash -l {0}
       run: |
         make lint
     - name: Test
+      shell: bash -l {0}
       run: |      
         make test
