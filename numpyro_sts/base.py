@@ -6,8 +6,10 @@ import numpy as np
 from jax import vmap
 from jax.random import normal
 from numpyro.contrib.control_flow import scan
-from numpyro.distributions import Distribution, Normal, constraints
+from numpyro.distributions import Distribution, Normal, constraints, MultivariateNormal
 from numpyro.distributions.util import validate_sample
+from numpyro.util import is_prng_key
+
 
 ArrayLike = Union[jnp.ndarray, Number, np.ndarray]
 
@@ -35,7 +37,7 @@ class LinearTimeseries(Distribution):
     """
 
     pytree_data_fields = ("offset", "matrix", "std", "initial_value", "mask")
-    pytree_aux_fields = ("n", "_sample_shape", "_column_mask")
+    pytree_aux_fields = ("n", "_sample_shape", "_column_mask", "_std_is_matrix")
 
     support = constraints.real_matrix
     has_enumerate_support = False
@@ -49,11 +51,14 @@ class LinearTimeseries(Distribution):
     }
 
     @staticmethod
-    def _verify_parameters(offset, matrix, std, initial_value):
+    def _verify_parameters(offset, matrix, std, initial_value, std_is_matrix):
         ndim = matrix.shape[-1]
 
         assert initial_value.ndim >= 1
-        assert matrix.ndim >= 2 and matrix.shape[-2] == ndim
+        assert matrix.ndim >= 2 and matrix.shape[-2] == matrix.shape[-1] == ndim
+
+        if std_is_matrix:
+            assert std.ndim >= 2 and std.shape[-1] == std.shape[-2] == ndim
 
     def __init__(
         self,
@@ -63,24 +68,29 @@ class LinearTimeseries(Distribution):
         std: ArrayLike,
         initial_value: ArrayLike,
         *,
+        std_is_matrix: bool = False,
         mask: ArrayLike = None,
         validate_args=None,
     ):
-        self._verify_parameters(offset, matrix, std, initial_value)
+        self._verify_parameters(offset, matrix, std, initial_value, std_is_matrix)
         times = jnp.arange(n)
+
+        self._std_is_matrix = std_is_matrix
 
         event_shape = times.shape + initial_value.shape[-1:]
         batch_shape = jnp.broadcast_shapes(
-            offset.shape[:-1], matrix.shape[:-2], std.shape[:-1], initial_value.shape[:-1]
+            offset.shape[:-1], matrix.shape[:-2], std.shape[:-(1 + int(self._std_is_matrix))], initial_value.shape[:-1]
         )
 
         parameter_shape = batch_shape + initial_value.shape[-1:]
 
         self.n = n
         self.offset = jnp.broadcast_to(offset, parameter_shape)
-        self.matrix = jnp.broadcast_to(matrix, parameter_shape + initial_value.shape[-1:])
-        self.std = jnp.broadcast_to(std, parameter_shape)
         self.initial_value = jnp.broadcast_to(initial_value, parameter_shape)
+        self.matrix = jnp.broadcast_to(matrix, parameter_shape + initial_value.shape[-1:])
+
+        std_shape = parameter_shape if not self._std_is_matrix else parameter_shape + initial_value.shape[-1:]
+        self.std = jnp.broadcast_to(std, std_shape)
 
         cols_to_sample = event_shape[-1]
         if mask is not None:
@@ -102,7 +112,7 @@ class LinearTimeseries(Distribution):
         return result.at[..., self._column_mask].set(samples)
 
     def sample(self, key, sample_shape=()):
-        # assert is_prng_key(key)
+        assert is_prng_key(key)
 
         batch_shape = sample_shape + self.batch_shape
 
@@ -152,15 +162,27 @@ class LinearTimeseries(Distribution):
             loc = _loc_transition(x_tm1, self.offset, self.matrix)
 
         x_t = stacked[..., 1:, :]
-        std = jnp.expand_dims(self.std, -2)
+
+        std = self.std
+        if not self._std_is_matrix:
+            std = jnp.expand_dims(std, -2)
 
         if self._column_mask is not None:
             loc = loc[..., self._column_mask]
             std = std[..., self._column_mask]
+
+            if self._std_is_matrix:
+                std = std[..., self._column_mask, :]
+
             x_t = x_t[..., self._column_mask]
 
         # NB: Could also use event shapes
-        return Normal(loc, std).log_prob(x_t).sum(axis=(-2, -1))
+        if not self._std_is_matrix:
+            dist = Normal(loc, std).to_event(1)
+        else:
+            dist = MultivariateNormal(loc, scale_tril=std)
+
+        return dist.log_prob(x_t).sum(axis=-1)
 
     def sample_from_shock(self, x_t, eps_t: jnp.ndarray) -> jnp.ndarray:
         """
@@ -175,4 +197,8 @@ class LinearTimeseries(Distribution):
         """
 
         loc = _loc_transition(x_t, self.offset, self.matrix)
-        return loc + self.std * eps_t
+
+        if not self._std_is_matrix:
+            return loc + self.std * eps_t
+
+        return loc + (self.std @ eps_t[..., None]).squeeze(-1)
