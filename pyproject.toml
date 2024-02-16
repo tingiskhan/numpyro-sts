@@ -35,6 +35,7 @@ dev = [
     "pytest>=7.1.2",
     "black",
     "isort",
+    "ruff",
 ]
 
 [project.urls]
