@@ -79,7 +79,7 @@ class LinearTimeseries(Distribution):
 
         event_shape = times.shape + initial_value.shape[-1:]
         batch_shape = jnp.broadcast_shapes(
-            offset.shape[:-1], matrix.shape[:-2], std.shape[:-(1 + int(self._std_is_matrix))], initial_value.shape[:-1]
+            offset.shape[:-1], matrix.shape[:-2], std.shape[: -(1 + int(self._std_is_matrix))], initial_value.shape[:-1]
         )
 
         parameter_shape = batch_shape + initial_value.shape[-1:]
