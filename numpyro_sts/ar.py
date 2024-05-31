@@ -29,9 +29,8 @@ class AutoRegressive(LinearTimeseries):
         mu = jnp.reshape(mu, batch_shape + (1,))
 
         if order > 1:
-            phi = jnp.concatenate([phi, jnp.eye(order - 1, order)], axis=-2)
-
             offset = mu * (1.0 - phi.sum(axis=-1))
+            phi = jnp.concatenate([phi, jnp.eye(order - 1, order)], axis=-2)
 
             zeros = jnp.zeros(batch_shape + (order - 1,))
             offset = jnp.concatenate([offset, zeros], axis=-1)
