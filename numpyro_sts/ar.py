@@ -37,7 +37,7 @@ class AutoRegressive(LinearTimeseries):
             offset = jnp.concatenate([offset, zeros], axis=-1)
             std = jnp.concatenate([std, zeros], axis=-1)
         else:
-            offset = mu * (1.0 - phi)
+            offset = mu * (1.0 - phi.squeeze(-1))
 
         init = jnp.reshape(initial_value if initial_value is not None else jnp.zeros(order), batch_shape + (order,))
 
