@@ -28,14 +28,15 @@ class AutoRegressive(LinearTimeseries):
         std = jnp.reshape(std, batch_shape + (1,))
         mu = jnp.reshape(mu, batch_shape + (1,))
 
-        offset = mu * (1.0 - phi.sum(axis=-1))
-
         if order > 1:
+            offset = mu * (1.0 - phi.sum(axis=-1))
             phi = jnp.concatenate([phi, jnp.eye(order - 1, order)], axis=-2)
 
             zeros = jnp.zeros(batch_shape + (order - 1,))
             offset = jnp.concatenate([offset, zeros], axis=-1)
             std = jnp.concatenate([std, zeros], axis=-1)
+        else:
+            offset = mu * (1.0 - phi.squeeze(-1))
 
         init = jnp.reshape(initial_value if initial_value is not None else jnp.zeros(order), batch_shape + (order,))
 
