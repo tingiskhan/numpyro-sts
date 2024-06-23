@@ -64,7 +64,7 @@ class DiscreteMarkovChain(Distribution):
             transition_probabilities = self.transition_matrix[..., x_t, :]
 
             key_tp1, _ = jrnd.split(key_t)
-            x_tp1 = Categorical(probs=transition_probabilities).sample(key, sample_shape=sample_shape)
+            x_tp1 = Categorical(probs=transition_probabilities).sample(key_tp1, sample_shape=sample_shape)
 
             return (x_tp1, key_tp1), x_tp1
 
