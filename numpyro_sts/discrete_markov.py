@@ -1,6 +1,10 @@
 from jax.typing import ArrayLike
 import jax.numpy as jnp
+import jax.random as jrnd
+from numpyro.contrib.control_flow import scan
 from numpyro.distributions import Distribution, constraints, Categorical
+
+from .util import cast_to_tensor
 
 
 def _find_stationary(p: ArrayLike) -> jnp.ndarray:
@@ -49,14 +53,24 @@ class DiscreteMarkovChain(Distribution):
         assert transition_matrix.shape[0] == transition_matrix.shape[1], "The transition matrix must be square!"
 
         self.n = n
-        self.transition_matrix = transition_matrix
+        self.transition_matrix, = cast_to_tensor(transition_matrix)
         self.stationary_distribution = _find_stationary(self.transition_matrix)
 
     def sample(self, key, sample_shape=()):
         initial_state = Categorical(probs=self.stationary_distribution).sample(key, sample_shape=sample_shape)
 
-        return initial_state
+        def body_fn(state_t, _):
+            x_t, key_t = state_t
+            transition_probabilities = self.transition_matrix[..., x_t, :]
 
+            key_tp1, _ = jrnd.split(key_t)
+            x_tp1 = Categorical(probs=transition_probabilities).sample(key, sample_shape=sample_shape)
+
+            return (x_tp1, key_tp1), x_tp1
+
+        _, x = scan(body_fn, (initial_state, key), jnp.arange(self.n))
+
+        return x
 
     def log_prob(self, value):
         pass
