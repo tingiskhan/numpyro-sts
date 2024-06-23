@@ -75,3 +75,6 @@ push = false
 
 [tool.setuptools.dynamic]
 version = {attr = "numpyro_sts.__version__"}
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

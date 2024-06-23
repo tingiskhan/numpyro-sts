@@ -1,17 +1,11 @@
-from numbers import Number
-from typing import Union
-
 import jax.numpy as jnp
-import numpy as np
 from jax import vmap
 from jax.random import normal
 from numpyro.contrib.control_flow import scan
 from numpyro.distributions import Distribution, Normal, constraints, MultivariateNormal
 from numpyro.distributions.util import validate_sample
 from numpyro.util import is_prng_key
-
-
-ArrayLike = Union[jnp.ndarray, Number, np.ndarray]
+from jax.typing import ArrayLike
 
 
 def _broadcast_and_reshape(x: jnp.ndarray, shape, dim: int) -> jnp.ndarray:
