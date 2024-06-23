@@ -3,6 +3,7 @@ import jax.numpy as jnp
 import jax.random as jrnd
 from numpyro.contrib.control_flow import scan
 from numpyro.distributions import Distribution, constraints, Categorical
+import jax.scipy as jsc
 
 from .util import cast_to_tensor
 
@@ -57,14 +58,17 @@ class DiscreteMarkovChain(Distribution):
         self.stationary_distribution = _find_stationary(self.transition_matrix)
 
     def sample(self, key, sample_shape=()):
-        initial_state = Categorical(probs=self.stationary_distribution).sample(key, sample_shape=sample_shape)
+        shape = sample_shape + self.batch_shape
+
+        as_logits = jsc.special.logit(self.transition_matrix)
+        initial_state = jrnd.categorical(key, jsc.special.logit(self.stationary_distribution), shape=shape)
 
         def body_fn(state_t, _):
             x_t, key_t = state_t
-            transition_probabilities = self.transition_matrix[..., x_t, :]
+            transition_probabilities = as_logits[..., x_t, :]
 
             key_tp1, _ = jrnd.split(key_t)
-            x_tp1 = Categorical(probs=transition_probabilities).sample(key_tp1, sample_shape=sample_shape)
+            x_tp1 = jrnd.categorical(key_tp1, transition_probabilities, shape=shape)
 
             return (x_tp1, key_tp1), x_tp1
 
