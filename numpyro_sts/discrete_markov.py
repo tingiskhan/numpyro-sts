@@ -56,13 +56,14 @@ class DiscreteMarkovChain(Distribution):
 
     # TODO: set event shape etc.
     def __init__(self, n: int, transition_matrix: ArrayLike, *, validate_args: bool = False):
-        super().__init__(validate_args=validate_args)
-
         assert transition_matrix.shape[0] == transition_matrix.shape[1], "The transition matrix must be square!"
 
         self.n = n
         self.transition_matrix, = cast_to_tensor(transition_matrix)
         self.logit_stationary_distribution = _find_stationary(self.transition_matrix, as_logit=True)
+
+        batch_shape = self.transition_matrix.shape[:-2]
+        super().__init__(batch_shape=batch_shape, event_shape=(self.n,), validate_args=validate_args)
 
     def sample(self, key, sample_shape=()):
         shape = sample_shape + self.batch_shape
