@@ -1,8 +1,9 @@
 import jax.numpy as jnp
 import numpy as np
 from numpyro.distributions.util import promote_shapes
+from jax.typing import ArrayLike
 
-from .base import ArrayLike, LinearTimeseries
+from .base import LinearTimeseries
 
 
 class SmoothLocalLinearTrend(LinearTimeseries):
