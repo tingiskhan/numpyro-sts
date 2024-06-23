@@ -82,7 +82,7 @@ class DiscreteMarkovChain(Distribution):
 
         _, x = scan(body_fn, (initial_state, key), jnp.arange(self.n))
 
-        return x
+        return jnp.moveaxis(x, 0, -1)
 
     def log_prob(self, value):
         pass
