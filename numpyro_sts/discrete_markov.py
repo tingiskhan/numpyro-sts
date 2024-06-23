@@ -2,7 +2,7 @@ from jax.typing import ArrayLike
 import jax.numpy as jnp
 import jax.random as jrnd
 from numpyro.contrib.control_flow import scan
-from numpyro.distributions import Distribution, constraints
+from numpyro.distributions import Distribution, constraints, Categorical
 import jax.scipy as jsc
 
 from .util import cast_to_tensor
@@ -46,7 +46,7 @@ class DiscreteMarkovChain(Distribution):
     """
 
     pytree_aux_fields = ("n",)
-    pytree_data_fields = ("transition_matrix", "logit_stationary_distribution")
+    pytree_data_fields = ("transition_matrix", "initial_value")
 
     has_enumerate_support = True
     arg_constraints = {
@@ -55,21 +55,32 @@ class DiscreteMarkovChain(Distribution):
     }
 
     # TODO: set event shape etc.
-    def __init__(self, n: int, transition_matrix: ArrayLike, *, validate_args: bool = False):
+    def __init__(self, n: int, transition_matrix: ArrayLike, inital_value: ArrayLike, *, validate_args: bool = False):
         assert transition_matrix.shape[0] == transition_matrix.shape[1], "The transition matrix must be square!"
 
         self.n = n
-        self.transition_matrix, = cast_to_tensor(transition_matrix)
-        self.logit_stationary_distribution = _find_stationary(self.transition_matrix, as_logit=True)
+        self.transition_matrix, self.initial_value = cast_to_tensor(transition_matrix, inital_value)
 
         batch_shape = self.transition_matrix.shape[:-2]
         super().__init__(batch_shape=batch_shape, event_shape=(self.n,), validate_args=validate_args)
 
+    @staticmethod
+    def get_stationary_distribution(transition_matrix: ArrayLike) -> jnp.ndarray:
+        """
+        Gets the stationary distribution for a given transition matrix.
+
+        Args:
+            transition_matrix: Transition matrix of the Markov chain.
+
+        Returns:
+            Returns a vector of stationary probabilities.
+        """
+
+        return _find_stationary(transition_matrix)
+
     def sample(self, key, sample_shape=()):
         shape = sample_shape + self.batch_shape
-
         as_logits = jsc.special.logit(self.transition_matrix)
-        initial_state = jrnd.categorical(key, self.logit_stationary_distribution, shape=shape)
 
         def body_fn(state_t, _):
             x_t, key_t = state_t
@@ -80,9 +91,25 @@ class DiscreteMarkovChain(Distribution):
 
             return (x_tp1, key_tp1), x_tp1
 
-        _, x = scan(body_fn, (initial_state, key), jnp.arange(self.n))
+        initial_value = jnp.broadcast_to(self.initial_value, sample_shape)
+        _, x = scan(body_fn, (initial_value, key), jnp.arange(self.n))
 
         return jnp.moveaxis(x, 0, -1)
 
     def log_prob(self, value):
-        pass
+        sample_shape = jnp.broadcast_shapes(value.shape[: -self.event_dim], self.batch_shape)
+
+        initial_value = jnp.broadcast_to(self.initial_value, sample_shape)
+        value = jnp.concatenate([initial_value[..., None], value], axis=-1)
+
+        x_tm1 = value[..., :-1]
+        x_t = value[..., 1:]
+
+        transition_probabilities = jnp.broadcast_to(
+            self.transition_matrix, sample_shape + self.transition_matrix.shape[-2:]
+        )
+
+        # TODO: might have to use take along dim?
+        selected_transition_probabilities = jnp.take_along_axis(transition_probabilities, x_tm1[..., None], axis=-2)
+
+        return Categorical(probs=selected_transition_probabilities).to_event(self.event_dim).log_prob(x_t)

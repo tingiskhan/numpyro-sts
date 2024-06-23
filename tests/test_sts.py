@@ -5,11 +5,17 @@ import numpy as np
 from numpyro.distributions import HalfNormal, Normal
 from numpyro.infer import MCMC, NUTS
 
-from numpyro_sts import RandomWalk, LocalLinearTrend, AutoRegressive, LinearTimeseries, SmoothLocalLinearTrend
+from numpyro_sts import RandomWalk, LocalLinearTrend, AutoRegressive, LinearTimeseries, SmoothLocalLinearTrend, DiscreteMarkovChain
 
 
 def models(n):
     for b in [(), (5, 10)]:
+        transition_matrix = np.array([
+            [0.85, 0.15],
+            [0.2, 0.8]
+        ])
+
+        yield DiscreteMarkovChain(n, transition_matrix, inital_value=0).expand(b)
         yield RandomWalk(n, 0.05, 0.0, validate_args=True).expand(b)
         yield LocalLinearTrend(n, np.array([0.05, 1e-3]), np.zeros(2), validate_args=True).expand(b)
         yield AutoRegressive(n, 0.99, 0.05, 1, validate_args=True).expand(b)
