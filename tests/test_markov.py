@@ -43,3 +43,8 @@ def test_markov():
     mcmc.run(key, y.shape[0], y)
 
     # TODO: test values
+
+    posterior_samples = mcmc.get_samples(group_by_chain=False)
+
+    for name, s in samples.keys():
+        print()
