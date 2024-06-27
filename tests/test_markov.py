@@ -43,4 +43,3 @@ def test_markov():
     mcmc.run(key, y.shape[0], y)
 
     # TODO: test values
-    print()
