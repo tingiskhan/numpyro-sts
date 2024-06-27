@@ -27,7 +27,8 @@ classifiers = [
 
 dependencies = [
     "numpyro",
-    "numpy"
+    "numpy",
+    "funsor",
 ]
 
 [project.optional-dependencies]

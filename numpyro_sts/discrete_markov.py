@@ -8,7 +8,7 @@ import jax.scipy as jsc
 from .util import cast_to_tensor
 
 
-def _find_stationary(p: ArrayLike, as_logit: bool = True) -> jnp.ndarray:
+def _find_stationary(p: ArrayLike, as_logit: bool = False) -> jnp.ndarray:
     """
     Finds the stationary distribution of a Markov chain.
 
@@ -49,6 +49,8 @@ class DiscreteMarkovChain(Distribution):
     pytree_data_fields = ("transition_matrix", "initial_value")
 
     has_enumerate_support = True
+    support = constraints.positive_integer
+
     arg_constraints = {
         "n": constraints.positive_integer,
         "transition_matrix": constraints.greater_than_eq(0.0),
@@ -65,18 +67,19 @@ class DiscreteMarkovChain(Distribution):
         super().__init__(batch_shape=batch_shape, event_shape=(self.n,), validate_args=validate_args)
 
     @staticmethod
-    def get_stationary_distribution(transition_matrix: ArrayLike) -> jnp.ndarray:
+    def get_stationary_distribution(transition_matrix: ArrayLike, as_logit: bool = False) -> jnp.ndarray:
         """
         Gets the stationary distribution for a given transition matrix.
 
         Args:
             transition_matrix: Transition matrix of the Markov chain.
+            as_logit: Whether to return probabilities on logit form or not.
 
         Returns:
             Returns a vector of stationary probabilities.
         """
 
-        return _find_stationary(transition_matrix)
+        return _find_stationary(transition_matrix, as_logit=as_logit)
 
     def sample(self, key, sample_shape=()):
         shape = sample_shape + self.batch_shape
@@ -113,3 +116,6 @@ class DiscreteMarkovChain(Distribution):
         selected_transition_probabilities = jnp.take_along_axis(transition_probabilities, x_tm1[..., None], axis=-2)
 
         return Categorical(probs=selected_transition_probabilities).to_event(self.event_dim).log_prob(x_t)
+
+    def enumerate_support(self, expand=True):
+        return Categorical(probs=self.transition_matrix).enumerate_support(expand=expand)
