@@ -41,6 +41,10 @@ dev = [
     "bumpver",
 ]
 
+viz = [
+    "matplotlib",
+]
+
 [project.urls]
 homepage = "https://github.com/tingiskhan/numpyro-sts"
 
