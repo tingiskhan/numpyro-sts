@@ -118,4 +118,12 @@ class DiscreteMarkovChain(Distribution):
         return Categorical(probs=selected_transition_probabilities).to_event(self.event_dim).log_prob(x_t)
 
     def enumerate_support(self, expand=True):
-        return Categorical(probs=self.transition_matrix).enumerate_support(expand=expand)
+        values = jnp.arange(self.transition_matrix.shape[-1])[..., None]
+
+        shape = jnp.broadcast_shapes(values.shape, self.event_shape)
+        values = jnp.broadcast_to(values, shape)
+
+        if expand:
+            values = jnp.broadcast_to(values, values.shape[:1] + self.batch_shape)
+
+        return values
