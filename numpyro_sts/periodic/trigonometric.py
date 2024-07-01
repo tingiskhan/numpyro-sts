@@ -20,3 +20,4 @@ class TrigonometricSeasonality(Cyclical):
         lamdas = 2 * jnp.pi * jnp.arange(1, half_seasons + 1) / num_seasons
 
         super().__init__(n, lamdas, std, initial_value)
+        self.to_event(1)
