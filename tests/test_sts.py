@@ -17,6 +17,7 @@ def models(n):
         yield AutoRegressive(n, np.array([0.99, -0.5]), 0.05, 2, 0.5).expand(b)
         yield periodic.SeasonalSeries(n, 5, 0.05, np.zeros(4)).expand(b)
         yield periodic.Cyclical(n, 2.0 * np.pi / (n // 2), 0.05, np.zeros(2)).expand(b)
+        yield periodic.TrigonometricSeasonality(n, 5, 0.05, np.zeros((3, 2)))
 
         mat = np.array([
             [0.95, -0.05],
