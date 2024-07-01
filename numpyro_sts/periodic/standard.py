@@ -1,5 +1,6 @@
 from numpy.typing import ArrayLike
 import jax.numpy as jnp
+import numpy as np
 
 from ..base import LinearTimeseries
 from ..util import cast_to_tensor
@@ -24,7 +25,7 @@ class SeasonalSeries(LinearTimeseries):
         matrix = jnp.concatenate([top, bottom], axis=-2)
         offset = jnp.ones_like(top).squeeze(-2)
 
-        mask = jnp.eye(num_seasons - 1, 1).squeeze(-1).astype(jnp.bool_)
+        mask = np.eye(num_seasons - 1, 1).squeeze(-1).astype(jnp.bool_)
 
         std, initial_value = cast_to_tensor(std, initial_value)
         std = std * mask
