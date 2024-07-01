@@ -23,7 +23,7 @@ class SeasonalSeries(LinearTimeseries):
         bottom = jnp.eye(num_seasons - 2, num_seasons - 1)
 
         matrix = jnp.concatenate([top, bottom], axis=-2)
-        offset = jnp.ones_like(top).squeeze(-2)
+        offset = jnp.zeros_like(top).squeeze(-2)
 
         mask = np.eye(num_seasons - 1, 1).squeeze(-1).astype(jnp.bool_)
 
