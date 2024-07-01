@@ -5,7 +5,7 @@ import numpy as np
 from numpyro.distributions import HalfNormal, Normal
 from numpyro.infer import MCMC, NUTS
 
-from numpyro_sts import RandomWalk, LocalLinearTrend, AutoRegressive, LinearTimeseries, SmoothLocalLinearTrend
+from numpyro_sts import RandomWalk, LocalLinearTrend, AutoRegressive, LinearTimeseries, SmoothLocalLinearTrend, seasonal
 
 
 def models(n):
@@ -15,6 +15,7 @@ def models(n):
         yield AutoRegressive(n, 0.99, 0.05, 1, validate_args=True).expand(b)
         yield AutoRegressive(n, np.array([0.99, -0.5]), 0.05, 2, validate_args=True).expand(b)
         yield AutoRegressive(n, np.array([0.99, -0.5]), 0.05, 2, 0.5).expand(b)
+        yield seasonal.SeasonalSeries(n, 5, 0.05, np.zeros(4))
 
         mat = np.array([
             [0.95, -0.05],
