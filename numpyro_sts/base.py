@@ -49,6 +49,7 @@ class LinearTimeseries(Distribution):
 
         assert initial_value.ndim >= 1
         assert matrix.ndim >= 2 and matrix.shape[-2] == matrix.shape[-1] == ndim
+        assert initial_value.shape[-1] == matrix.shape[-1]
 
         if std_is_matrix:
             assert std.ndim >= 2 and std.shape[-1] == std.shape[-2] == ndim
