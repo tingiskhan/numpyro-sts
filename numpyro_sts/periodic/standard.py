@@ -7,7 +7,7 @@ from ..util import cast_to_tensor
 
 class SeasonalSeries(LinearTimeseries):
     r"""
-    Represents a seasonal component of the form:
+    Represents a periodic component of the form:
 
     .. math::
         \gamma_{t + 1} = \sum_{i = 1}^{s - 1} \gamma_{t + 1 - j} + \eps_{t + 1}

@@ -8,7 +8,7 @@ from ..base import LinearTimeseries
 
 class TrigonometricSeasonality(LinearTimeseries):
     """
-    Represents a seasonal component by means of a trigonometric series TODO: math
+    Represents a periodic component by means of a trigonometric series TODO: math
     """
 
     def __init__(self, n: int, num_seasons: int, std: ArrayLike, initial_value: ArrayLike):
