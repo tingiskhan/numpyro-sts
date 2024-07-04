@@ -6,6 +6,7 @@ from numpyro.distributions import Distribution, Normal, constraints, Multivariat
 from numpyro.distributions.util import validate_sample
 from numpyro.util import is_prng_key
 from jax.typing import ArrayLike
+import jax.scipy.linalg as linalg
 
 
 def _broadcast_and_reshape(x: jnp.ndarray, shape, dim: int) -> jnp.ndarray:
@@ -29,8 +30,8 @@ class LinearTimeseries(Distribution):
         mask: Mask for removing specific columns from calculation.
     """
 
-    pytree_data_fields = ("offset", "matrix", "std", "initial_value", "mask")
-    pytree_aux_fields = ("n", "_sample_shape", "_column_mask", "_std_is_matrix")
+    pytree_data_fields = ("offset", "matrix", "std", "initial_value", "mask", "_selector")
+    pytree_aux_fields = ("n", "_sample_shape", "_std_is_matrix")
 
     support = constraints.real_matrix
     has_enumerate_support = False
@@ -63,7 +64,6 @@ class LinearTimeseries(Distribution):
         initial_value: ArrayLike,
         *,
         std_is_matrix: bool = False,
-        mask: ArrayLike = None,
         validate_args=None,
     ):
         self._verify_parameters(offset, matrix, std, initial_value, std_is_matrix)
@@ -86,24 +86,36 @@ class LinearTimeseries(Distribution):
         std_shape = parameter_shape if not self._std_is_matrix else parameter_shape + initial_value.shape[-1:]
         self.std = jnp.broadcast_to(std, std_shape)
 
-        cols_to_sample = event_shape[-1]
-        if mask is not None:
-            assert mask.shape == event_shape[-1:], "Shapes not congruent!"
-            cols_to_sample = mask.sum(axis=-1)
-
-        self._column_mask = mask
-        self._shock_shape = times.shape + (cols_to_sample,)
-
         super().__init__(batch_shape=batch_shape, event_shape=event_shape, validate_args=validate_args)
 
+        selector = jnp.eye(self.event_shape[-1])
+        selector = jnp.broadcast_to(selector, self.batch_shape + selector.shape)
+
+        if not self._std_is_matrix:
+            non_zero_mask = self.std != 0.0
+        else:
+            diag_indices = jnp.diag_indices(self.event_shape[-1], ndim=self.std.ndim)
+            diag = self.std[..., *diag_indices]
+            non_zero_mask = diag != 0.0
+
+        # TODO: don't think this is correct?
+        self._selector = selector[..., non_zero_mask]
+
     def _sample_shocks(self, key, batch_shape) -> jnp.ndarray:
-        samples = normal(key, shape=batch_shape + self._shock_shape)
+        shock_shape = self.event_shape[:-1] + self._selector.shape[-1:]
+        samples = normal(key, shape=batch_shape + shock_shape)
 
-        if self._column_mask is None:
-            return samples
+        fun = lambda u, v: (u @ v[..., None]).squeeze(-1)
+        selector = self._selector
 
-        result = jnp.zeros(batch_shape + self.event_shape, dtype=samples.dtype)
-        return result.at[..., self._column_mask].set(samples)
+        if batch_shape:
+            samples = samples.reshape((-1,) + shock_shape)
+            selector = jnp.broadcast_to(selector, samples.shape[:1] + selector.shape[-2:])
+            fun = vmap(fun)
+
+        rotated_samples = fun(selector, samples)
+
+        return rotated_samples.reshape(batch_shape + self.event_shape)
 
     def sample(self, key, sample_shape=()):
         assert is_prng_key(key)
@@ -141,40 +153,45 @@ class LinearTimeseries(Distribution):
         initial_value = jnp.broadcast_to(initial_value, sample_shape + initial_value.shape[-2:])
 
         stacked = jnp.concatenate([initial_value, value], axis=-2)
+        loc_fun = _loc_transition
+
+        offset = self.offset
+        matrix = self.matrix
+        std = self.std
+
+        selector = self._selector
+        inverse_fun = jnp.matmul
 
         if sample_shape:
-            stacked_reshape = stacked.reshape((-1,) + stacked.shape[-2:])
-            x_tm1 = stacked_reshape[:, :-1]
+            stacked = stacked.reshape((-1,) + stacked.shape[-2:])
 
-            offset = _broadcast_and_reshape(self.offset, sample_shape, -1)
-            matrix = _broadcast_and_reshape(self.matrix, sample_shape, -2)
+            offset = _broadcast_and_reshape(offset, sample_shape, -1)
+            matrix = _broadcast_and_reshape(matrix, sample_shape, -2)
+            std = _broadcast_and_reshape(std, sample_shape, -2 if self._std_is_matrix else -1)
 
-            loc = vmap(_loc_transition)(x_tm1, offset, matrix).reshape(sample_shape + self.event_shape)
-        else:
-            x_tm1 = stacked[:-1]
-            loc = _loc_transition(x_tm1, self.offset, self.matrix)
+            selector = jnp.broadcast_to(selector, stacked.shape[:1] + selector.shape)
 
+            loc_fun = vmap(_loc_transition)
+            inverse_fun = vmap(inverse_fun)
+
+        x_tm1 = stacked[..., :-1, :]
         x_t = stacked[..., 1:, :]
 
-        std = self.std
-        if not self._std_is_matrix:
-            std = jnp.expand_dims(std, -2)
+        loc = loc_fun(x_tm1, offset, matrix)
 
-        if self._column_mask is not None:
-            loc = loc[..., self._column_mask]
-            std = std[..., self._column_mask]
-
-            if self._std_is_matrix:
-                std = std[..., self._column_mask, :]
-
-            x_t = x_t[..., self._column_mask]
+        transposed_selector = selector.swapaxes(-1, -2)
+        loc = inverse_fun(transposed_selector, loc[..., None]).squeeze(-1)
 
         if not self._std_is_matrix:
-            dist = Normal(loc, std).to_event(1)
+            std = inverse_fun(transposed_selector, std[..., None]).swapaxes(-1, -2)
+            dist = Normal(loc, std).to_event(2)
         else:
-            dist = MultivariateNormal(loc, scale_tril=std)
+            std = inverse_fun(transposed_selector, std)
+            std = jnp.expand_dims(std, -3)
 
-        return dist.log_prob(x_t).sum(axis=-1)
+            dist = MultivariateNormal(loc, scale_tril=std).to_event(1)
+
+        return dist.log_prob(x_t).reshape(sample_shape)
 
     def sample_from_shock(self, x_t, eps_t: jnp.ndarray) -> jnp.ndarray:
         """
@@ -194,3 +211,30 @@ class LinearTimeseries(Distribution):
             return loc + self.std * eps_t
 
         return loc + (self.std @ eps_t[..., None]).squeeze(-1)
+
+    def union(self, other: "LinearTimeseries") -> "LinearTimeseries":
+        """
+        Combines self with other series to create a joint series.
+
+        Args:
+            other: Other series to combine.
+
+        Returns:
+            Returns a new instance of :class:`LinearTimeseries`.
+        """
+
+        assert self.n == other.n, "Number of steps do not match!"
+        batch_shape = jnp.broadcast_shapes(self.batch_shape, other.batch_shape)
+
+        assert not batch_shape, "Currently does not support batch shapes!"
+
+        matrix = linalg.block_diag(self.matrix, other.matrix)
+        offset = jnp.concatenate([self.offset, other.offset], axis=-1)
+        initial_value = jnp.concatenate([self.initial_value, other.initial_value], axis=-1)
+
+        # TODO: fix other ones as well
+        std = jnp.concatenate([self.std, other.std], axis=-1)
+
+        model = LinearTimeseries(self.n, offset, matrix, std, initial_value, std_is_matrix=False)
+
+        return model

@@ -25,9 +25,7 @@ class SeasonalSeries(LinearTimeseries):
         matrix = jnp.concatenate([top, bottom], axis=-2)
         offset = jnp.zeros_like(top).squeeze(-2)
 
-        mask = np.eye(num_seasons - 1, 1).squeeze(-1).astype(jnp.bool_)
-
         std, initial_value = cast_to_tensor(std, initial_value)
-        std = std * mask
+        std = jnp.concatenate([std[..., None], jnp.zeros(num_seasons - 2)], axis=-1)
 
-        super().__init__(n, offset, matrix, std, initial_value, mask=mask)
+        super().__init__(n, offset, matrix, std, initial_value)

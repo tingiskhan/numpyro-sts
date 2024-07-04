@@ -24,6 +24,4 @@ class SmoothLocalLinearTrend(LinearTimeseries):
         matrix = jnp.array([[1.0, 1.0], [0.0, 1.0]])
         offset = jnp.zeros_like(initial_value)
 
-        mask = np.array([False, True])
-
-        super().__init__(n, offset, matrix, std, initial_value, mask=mask, **kwargs)
+        super().__init__(n, offset, matrix, std, initial_value, **kwargs)

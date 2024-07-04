@@ -41,6 +41,4 @@ class AutoRegressive(LinearTimeseries):
 
         init = jnp.reshape(initial_value if initial_value is not None else jnp.zeros(order), batch_shape + (order,))
 
-        mask = np.array([True] + (order - 1) * [False], dtype=jnp.bool_)
-
-        super().__init__(n, offset, phi, std, init, mask=mask, **kwargs)
+        super().__init__(n, offset, phi, std, init, **kwargs)
