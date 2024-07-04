@@ -37,7 +37,7 @@ class LinearTimeseries(Distribution):
     """
 
     pytree_data_fields = ("offset", "matrix", "std", "initial_value")
-    pytree_aux_fields = ("n", "_sample_shape", "_std_is_matrix", "column_mask")
+    pytree_aux_fields = ("n", "_std_is_matrix", "column_mask")
 
     support = constraints.real_matrix
     has_enumerate_support = False
