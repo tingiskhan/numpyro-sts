@@ -89,17 +89,19 @@ class LinearTimeseries(Distribution):
         super().__init__(batch_shape=batch_shape, event_shape=event_shape, validate_args=validate_args)
 
         selector = jnp.eye(self.event_shape[-1])
-        selector = jnp.broadcast_to(selector, self.batch_shape + selector.shape)
 
         if not self._std_is_matrix:
-            non_zero_mask = self.std != 0.0
+            non_zeros = jnp.nonzero(self.std)
         else:
-            diag_indices = jnp.diag_indices(self.event_shape[-1], ndim=self.std.ndim)
+            diag_indices = jnp.diag_indices(self.event_shape[-1], ndim=2)
             diag = self.std[..., *diag_indices]
-            non_zero_mask = diag != 0.0
+            non_zeros = jnp.nonzero(diag)
 
-        # TODO: don't think this is correct?
-        self._selector = selector[..., non_zero_mask]
+        if not self.batch_shape:
+            self._selector = selector[..., non_zeros[-1]]
+        else:
+            # TODO: we must check that they have the exact same structure here
+            self._selector = selector[..., non_zeros[-1][:1]]
 
     def _sample_shocks(self, key, batch_shape) -> jnp.ndarray:
         shock_shape = self.event_shape[:-1] + self._selector.shape[-1:]
@@ -110,7 +112,7 @@ class LinearTimeseries(Distribution):
 
         if batch_shape:
             samples = samples.reshape((-1,) + shock_shape)
-            selector = jnp.broadcast_to(selector, samples.shape[:1] + selector.shape[-2:])
+            selector = jnp.broadcast_to(selector, samples.shape[:1] + selector.shape)
             fun = vmap(fun)
 
         rotated_samples = fun(selector, samples)
