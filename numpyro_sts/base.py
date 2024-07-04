@@ -1,4 +1,7 @@
+from functools import cached_property
+
 import jax.numpy as jnp
+import numpy as np
 from jax import vmap
 from jax.random import normal
 from numpyro.contrib.control_flow import scan
@@ -7,6 +10,9 @@ from numpyro.distributions.util import validate_sample
 from numpyro.util import is_prng_key
 from jax.typing import ArrayLike
 import jax.scipy.linalg as linalg
+
+
+from .util import build_selector
 
 
 def _broadcast_and_reshape(x: jnp.ndarray, shape, dim: int) -> jnp.ndarray:
@@ -27,11 +33,11 @@ class LinearTimeseries(Distribution):
         matrix: Matrix of linear combination of states. Of size :math:`[batch size] \times dimension \times dimension`.
         std: Standard deviation of innovations. Of size :math:`[batch size] \times dimension`.
         initial_value: Initial value of the time series. Of size :math:`[batch size] \times dimension`.
-        mask: Mask for removing specific columns from calculation.
+        column_mask: Mask for constructing the "selector" matrix.
     """
 
-    pytree_data_fields = ("offset", "matrix", "std", "initial_value", "mask", "_selector")
-    pytree_aux_fields = ("n", "_sample_shape", "_std_is_matrix")
+    pytree_data_fields = ("offset", "matrix", "std", "initial_value")
+    pytree_aux_fields = ("n", "_sample_shape", "_std_is_matrix", "column_mask")
 
     support = constraints.real_matrix
     has_enumerate_support = False
@@ -64,6 +70,7 @@ class LinearTimeseries(Distribution):
         initial_value: ArrayLike,
         *,
         std_is_matrix: bool = False,
+        column_mask: np.ndarray = None,
         validate_args=None,
     ):
         self._verify_parameters(offset, matrix, std, initial_value, std_is_matrix)
@@ -88,20 +95,14 @@ class LinearTimeseries(Distribution):
 
         super().__init__(batch_shape=batch_shape, event_shape=event_shape, validate_args=validate_args)
 
-        selector = jnp.eye(self.event_shape[-1])
+        if column_mask is None:
+            column_mask = np.ones(self.event_shape[-1], dtype=np.bool_)
 
-        if not self._std_is_matrix:
-            non_zeros = jnp.nonzero(self.std)
-        else:
-            diag_indices = jnp.diag_indices(self.event_shape[-1], ndim=2)
-            diag = self.std[..., *diag_indices]
-            non_zeros = jnp.nonzero(diag)
+        self.column_mask = column_mask
 
-        if not self.batch_shape:
-            self._selector = selector[..., non_zeros[-1]]
-        else:
-            # TODO: we must check that they have the exact same structure here
-            self._selector = selector[..., non_zeros[-1][:1]]
+    @cached_property
+    def _selector(self) -> jnp.ndarray:
+        return jnp.eye(self.event_shape[-1])[..., self.column_mask]
 
     def _sample_shocks(self, key, batch_shape) -> jnp.ndarray:
         shock_shape = self.event_shape[:-1] + self._selector.shape[-1:]
@@ -236,7 +237,8 @@ class LinearTimeseries(Distribution):
 
         # TODO: fix other ones as well
         std = jnp.concatenate([self.std, other.std], axis=-1)
+        mask = np.concatenate([self.column_mask, other.column_mask], axis=-1)
 
-        model = LinearTimeseries(self.n, offset, matrix, std, initial_value, std_is_matrix=False)
+        model = LinearTimeseries(self.n, offset, matrix, std, initial_value, column_mask=mask, std_is_matrix=False)
 
         return model

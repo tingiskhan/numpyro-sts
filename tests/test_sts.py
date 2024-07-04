@@ -8,6 +8,9 @@ from numpyro.infer import MCMC, NUTS
 from numpyro_sts import RandomWalk, LocalLinearTrend, AutoRegressive, LinearTimeseries, SmoothLocalLinearTrend, periodic
 
 
+numpyro.set_platform("cpu")
+
+
 def models(n):
     for b in [(), (5, 10)]:
         yield RandomWalk(n, 0.05, 0.0, validate_args=True).expand(b)
@@ -17,7 +20,6 @@ def models(n):
         yield AutoRegressive(n, np.array([0.99, -0.5]), 0.05, 2, 0.5).expand(b)
         yield periodic.SeasonalSeries(n, 5, 0.05, np.zeros(4)).expand(b)
         yield periodic.Cyclical(n, 2.0 * np.pi / (n // 2), 0.05, np.zeros(2)).expand(b)
-        # yield periodic.TrigonometricSeasonality(n, 5, 0.05, np.zeros((2, 2)))
 
         mat = np.array([
             [0.95, -0.05],
@@ -25,8 +27,9 @@ def models(n):
         ])
         std_mat = np.array([0.05, 0.0])
         offset = np.zeros_like(std_mat)
+        mask = std_mat != 0.0
 
-        yield LinearTimeseries(n, offset, mat, std_mat, np.zeros_like(std_mat)).expand(b)
+        yield LinearTimeseries(n, offset, mat, std_mat, np.zeros_like(std_mat), column_mask=mask).expand(b)
         yield SmoothLocalLinearTrend(n, 0.01, np.zeros(2)).expand(b)
 
         mat = np.eye(2)
@@ -35,7 +38,7 @@ def models(n):
 
         yield LinearTimeseries(n, offset, mat, std_mat, offset, std_is_matrix=True).expand(b)
 
-    # yield RandomWalk(n, np.full(10, 0.05), 0.0, validate_args=True)
+    yield RandomWalk(n, np.full(10, 0.05), 0.0, validate_args=True)
 
 
 N = 100

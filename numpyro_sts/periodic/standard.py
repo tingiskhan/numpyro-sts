@@ -18,7 +18,7 @@ class SeasonalSeries(LinearTimeseries):
 
     """
 
-    def __init__(self, n: int, num_seasons: int, std: ArrayLike, initial_value: ArrayLike):
+    def __init__(self, n: int, num_seasons: int, std: ArrayLike, initial_value: ArrayLike, **kwargs):
         top = -jnp.ones([1, num_seasons - 1])
         bottom = jnp.eye(num_seasons - 2, num_seasons - 1)
 
@@ -28,4 +28,6 @@ class SeasonalSeries(LinearTimeseries):
         std, initial_value = cast_to_tensor(std, initial_value)
         std = jnp.concatenate([std[..., None], jnp.zeros(num_seasons - 2)], axis=-1)
 
-        super().__init__(n, offset, matrix, std, initial_value)
+        mask = np.eye(num_seasons - 1, 1, dtype=np.bool_).squeeze(-1)
+
+        super().__init__(n, offset, matrix, std, initial_value, column_mask=mask, **kwargs)
