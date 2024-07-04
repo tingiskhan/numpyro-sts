@@ -184,6 +184,7 @@ class LinearTimeseries(Distribution):
 
         transposed_selector = selector.swapaxes(-1, -2)
         loc = inverse_fun(transposed_selector, loc[..., None]).squeeze(-1)
+        x_t = inverse_fun(transposed_selector, x_t[..., None]).squeeze(-1)
 
         if not self._std_is_matrix:
             std = inverse_fun(transposed_selector, std[..., None]).swapaxes(-1, -2)
