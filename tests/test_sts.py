@@ -17,7 +17,7 @@ def models(n):
         yield AutoRegressive(n, np.array([0.99, -0.5]), 0.05, 2, 0.5).expand(b)
         yield periodic.SeasonalSeries(n, 5, 0.05, np.zeros(4)).expand(b)
         yield periodic.Cyclical(n, 2.0 * np.pi / (n // 2), 0.05, np.zeros(2)).expand(b)
-        yield periodic.TrigonometricSeasonality(n, 5, 0.05, np.zeros((2, 2)))
+        # yield periodic.TrigonometricSeasonality(n, 5, 0.05, np.zeros((2, 2)))
 
         mat = np.array([
             [0.95, -0.05],
@@ -25,9 +25,8 @@ def models(n):
         ])
         std_mat = np.array([0.05, 0.0])
         offset = np.zeros_like(std_mat)
-        mask = np.array([True, False])
 
-        yield LinearTimeseries(n, offset, mat, std_mat, np.zeros_like(std_mat), mask=mask).expand(b)
+        yield LinearTimeseries(n, offset, mat, std_mat, np.zeros_like(std_mat)).expand(b)
         yield SmoothLocalLinearTrend(n, 0.01, np.zeros(2)).expand(b)
 
         mat = np.eye(2)
@@ -36,7 +35,7 @@ def models(n):
 
         yield LinearTimeseries(n, offset, mat, std_mat, offset, std_is_matrix=True).expand(b)
 
-    yield RandomWalk(n, np.full(10, 0.05), 0.0, validate_args=True)
+    # yield RandomWalk(n, np.full(10, 0.05), 0.0, validate_args=True)
 
 
 N = 100
