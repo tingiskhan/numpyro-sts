@@ -76,3 +76,22 @@ def test_models_numpyro_context():
     quantiles = np.quantile(samples["std"], [0.001, 0.999])
 
     assert (quantiles[0] <= true_model.std <= quantiles[1]).all()
+
+
+
+@pt.mark.parametrize("shape", [(), (10,)])
+def test_constant_model(shape):
+    mat = np.eye(2)
+    offset = np.ones(2)
+    initial_value = np.zeros_like(offset)
+    mask = np.zeros_like(offset, dtype=bool)
+
+    model = LinearTimeseries(N, offset, mat, np.zeros_like(offset), initial_value, column_mask=mask)
+
+    key = PRNGKey(123)
+    samples = model.sample(key, shape)
+
+    assert (samples[..., -1, :] == N).all()
+
+    log_prob = model.log_prob(samples)
+    assert (log_prob == 0.0).all()
