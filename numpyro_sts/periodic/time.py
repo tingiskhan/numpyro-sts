@@ -1,14 +1,15 @@
 from numpy.typing import ArrayLike
 import jax.numpy as jnp
 import numpy as np
+from numpyro.contrib.control_flow import scan
 
 from ..base import LinearTimeseries
 from ..util import cast_to_tensor
 
 
-class SeasonalSeries(LinearTimeseries):
+class TimeSeasonal(LinearTimeseries):
     r"""
-    Represents a periodic component of the form:
+    Represents a periodic series of the form:
 
     .. math::
         \gamma_{t + 1} = \sum_{i = 1}^{s - 1} \gamma_{t + 1 - j} + \eps_{t + 1}
@@ -31,3 +32,20 @@ class SeasonalSeries(LinearTimeseries):
         mask = np.eye(num_seasons - 1, 1, dtype=np.bool_).squeeze(-1)
 
         super().__init__(n, offset, matrix, std, initial_value, column_mask=mask, **kwargs)
+
+    def constant_seasonal(self) -> jnp.ndarray:
+        """
+        Helper method for "sampling" a constant seasonal series.
+
+        Returns:
+            A :class:`jnp.ndarray`.
+        """
+
+        def body_fn(x_t, _):
+            x_tp1 = self.matrix @ x_t
+
+            return x_tp1, x_tp1
+
+        _, seasonality = scan(body_fn, self.initial_value, jnp.arange(self.n))
+
+        return seasonality
