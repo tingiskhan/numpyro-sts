@@ -104,22 +104,17 @@ class LinearTimeseries(Distribution):
     def _sample_shocks(self, key, batch_shape) -> jnp.ndarray:
         shock_shape = self.event_shape[:-1] + self._selector.shape[-1:]
 
-        # TODO: nicify...
-        flat_shape = ()
-        if batch_shape:
-            size = reduce(lambda u, v: u * v, batch_shape)
-            flat_shape = (size,)
-
+        flat_shape = () if not batch_shape else (reduce(lambda u, v: u * v, batch_shape),)
         samples = normal(key, shape=flat_shape + shock_shape)
 
-        fun = lambda u, v: (u @ v[..., None]).squeeze(-1)
+        fun = jnp.matmul
         selector = self._selector
 
         if batch_shape:
             selector = jnp.broadcast_to(selector, samples.shape[:1] + selector.shape)
             fun = vmap(fun)
 
-        rotated_samples = fun(selector, samples)
+        rotated_samples = fun(selector, samples[..., None]).squeeze(-1)
 
         return rotated_samples.reshape(batch_shape + self.event_shape)
 
