@@ -4,7 +4,6 @@ from jax.random import PRNGKey
 import numpy as np
 from numpyro.distributions import HalfNormal, Normal
 from numpyro.infer import MCMC, NUTS
-from numpy.testing import assert_equal
 
 from numpyro_sts import RandomWalk, LocalLinearTrend, AutoRegressive, LinearTimeseries, SmoothLocalLinearTrend, periodic
 
@@ -21,6 +20,7 @@ def models(n):
         yield AutoRegressive(n, np.array([0.99, -0.5]), 0.05, 2, 0.5).expand(b)
         yield periodic.TimeSeasonal(n, 5, 0.05, np.zeros(4)).expand(b)
         yield periodic.Cyclical(n, 2.0 * np.pi / (n // 2), 0.05, np.zeros(2)).expand(b)
+        yield periodic.TrigonometricSeasonal(n, 4, 0.05, np.zeros(4)).expand(b)
 
         mat = np.array([
             [0.95, -0.05],

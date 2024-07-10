@@ -7,14 +7,14 @@ from ..util import cast_to_tensor
 
 class Cyclical(LinearTimeseries):
     """
-    Represents a periodic component by means of a trigonometric series TODO: math
+    Represents a cyclical component by means of a trigonometric series TODO: math
 
     Args:
         periodicity: Periodicity of component.
     """
 
-    def __init__(self, n: int, periodicity: int, std: ArrayLike, initial_value: ArrayLike, **kwargs):
-        (lamda,) = cast_to_tensor(periodicity)
+    def __init__(self, n: int, periodicity: ArrayLike, std: ArrayLike, initial_value: ArrayLike, **kwargs):
+        lamda, = cast_to_tensor(periodicity)
 
         cos_lamda = jnp.cos(lamda)
         sin_lamda = jnp.sin(lamda)
