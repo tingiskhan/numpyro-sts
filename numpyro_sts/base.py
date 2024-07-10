@@ -22,7 +22,9 @@ def _loc_transition(state, offset, matrix) -> jnp.ndarray:
     return offset + (matrix @ state[..., None]).reshape(state.shape)
 
 
-def _sample_shocks(key: PRNGKey, event_shape: Tuple[int, ...], batch_shape: Tuple[int, ...], selector: jnp.ndarray) -> jnp.ndarray:
+def _sample_shocks(
+    key: PRNGKey, event_shape: Tuple[int, ...], batch_shape: Tuple[int, ...], selector: jnp.ndarray
+) -> jnp.ndarray:
     shock_shape = event_shape[:-1] + selector.shape[-1:]
 
     flat_shape = () if not batch_shape else (reduce(lambda u, v: u * v, batch_shape),)
