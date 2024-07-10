@@ -242,7 +242,7 @@ class LinearTimeseries(Distribution):
 
     def sample_deterministic(self, sample_shape=()) -> jnp.ndarray:
         """
-        Utility function for "sampling" the determinstic part of the series.
+        Utility function for "sampling" the deterministic part of the series.
 
         Args:
             sample_shape: See :meth:`sample`.
