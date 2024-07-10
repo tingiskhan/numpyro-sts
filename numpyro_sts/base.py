@@ -3,16 +3,13 @@ from functools import cached_property
 import jax.numpy as jnp
 import numpy as np
 from jax import vmap
-from jax.random import normal
+from jax.random import normal, PRNGKey
 from numpyro.contrib.control_flow import scan
 from numpyro.distributions import Distribution, Normal, constraints, MultivariateNormal
 from numpyro.distributions.util import validate_sample
 from numpyro.util import is_prng_key
 from jax.typing import ArrayLike
 import jax.scipy.linalg as linalg
-
-
-from .util import build_selector
 
 
 def _broadcast_and_reshape(x: jnp.ndarray, shape, dim: int) -> jnp.ndarray:
@@ -243,3 +240,25 @@ class LinearTimeseries(Distribution):
         model = LinearTimeseries(self.n, offset, matrix, std, initial_value, column_mask=mask, std_is_matrix=False)
 
         return model
+
+    def sample_deterministic(self, shape=()) -> jnp.ndarray:
+        """
+        Utility function for "sampling" the determinstic part of the series.
+
+        Args:
+            shape: See :meth:`sample`.
+
+        Returns:
+            Returns samples.
+        """
+
+        copy = LinearTimeseries(
+            self.n,
+            self.offset,
+            self.matrix,
+            self.std,
+            self.initial_value,
+            column_mask=np.zeros_like(self.column_mask),
+        )
+
+        return copy.sample(PRNGKey(0), shape)

@@ -4,6 +4,7 @@ from jax.random import PRNGKey
 import numpy as np
 from numpyro.distributions import HalfNormal, Normal
 from numpyro.infer import MCMC, NUTS
+from numpy.testing import assert_equal
 
 from numpyro_sts import RandomWalk, LocalLinearTrend, AutoRegressive, LinearTimeseries, SmoothLocalLinearTrend, periodic
 
@@ -95,3 +96,6 @@ def test_constant_model(shape):
 
     log_prob = model.log_prob(samples)
     assert (log_prob == 0.0).all()
+
+    method_sample = model.sample_deterministic(shape)
+    assert (method_sample == samples).all()
