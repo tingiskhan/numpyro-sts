@@ -1,4 +1,5 @@
 from functools import cached_property, reduce
+from typing import Tuple
 
 import jax.numpy as jnp
 import numpy as np
@@ -19,6 +20,22 @@ def _broadcast_and_reshape(x: jnp.ndarray, shape, dim: int) -> jnp.ndarray:
 
 def _loc_transition(state, offset, matrix) -> jnp.ndarray:
     return offset + (matrix @ state[..., None]).reshape(state.shape)
+
+
+def _sample_shocks(key: PRNGKey, event_shape: Tuple[int, ...], batch_shape: Tuple[int, ...], selector: jnp.ndarray) -> jnp.ndarray:
+    shock_shape = event_shape[:-1] + selector.shape[-1:]
+
+    flat_shape = () if not batch_shape else (reduce(lambda u, v: u * v, batch_shape),)
+    samples = normal(key, shape=flat_shape + shock_shape)
+
+    fun = jnp.matmul
+    if batch_shape:
+        selector = jnp.broadcast_to(selector, samples.shape[:1] + selector.shape)
+        fun = vmap(fun)
+
+    rotated_samples = fun(selector, samples[..., None]).squeeze(-1)
+
+    return rotated_samples.reshape(batch_shape + event_shape)
 
 
 class LinearTimeseries(Distribution):
@@ -101,48 +118,29 @@ class LinearTimeseries(Distribution):
     def _selector(self) -> jnp.ndarray:
         return jnp.eye(self.event_shape[-1])[..., self.column_mask]
 
-    def _sample_shocks(self, key, batch_shape) -> jnp.ndarray:
-        shock_shape = self.event_shape[:-1] + self._selector.shape[-1:]
-
-        flat_shape = () if not batch_shape else (reduce(lambda u, v: u * v, batch_shape),)
-        samples = normal(key, shape=flat_shape + shock_shape)
-
-        fun = jnp.matmul
-        selector = self._selector
-
-        if batch_shape:
-            selector = jnp.broadcast_to(selector, samples.shape[:1] + selector.shape)
-            fun = vmap(fun)
-
-        rotated_samples = fun(selector, samples[..., None]).squeeze(-1)
-
-        return rotated_samples.reshape(batch_shape + self.event_shape)
-
     def sample(self, key, sample_shape=()):
         assert is_prng_key(key)
 
-        batch_shape = sample_shape + self.batch_shape
-
-        def body(state, xs):
-            (eps_tp1,) = xs
+        def body(state, eps_tp1):
             x_tp1 = self.sample_from_shock(state, eps_tp1)
-
             return x_tp1, x_tp1
 
         def scan_fn(init, noise):
-            return scan(body, init, (noise,))
+            return scan(body, init, noise)
 
-        eps = self._sample_shocks(key, batch_shape)
+        batch_shape = sample_shape + self.batch_shape
+
+        shocks = _sample_shocks(key, self.event_shape, batch_shape, self._selector)
         inits = jnp.broadcast_to(self.initial_value, sample_shape + self.initial_value.shape)
 
         batch_dim = len(batch_shape)
         if batch_dim:
-            eps = jnp.moveaxis(eps, -2, 0)
-            _, samples = scan_fn(inits, eps)
+            shocks = jnp.moveaxis(shocks, -2, 0)
+            _, samples = scan_fn(inits, shocks)
 
             return jnp.moveaxis(samples, 0, -2)
 
-        return scan_fn(inits, eps)[-1]
+        return scan_fn(inits, shocks)[-1]
 
     @validate_sample
     def log_prob(self, value):
