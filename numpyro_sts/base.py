@@ -247,12 +247,12 @@ class LinearTimeseries(Distribution):
 
         return model
 
-    def sample_deterministic(self, shape=()) -> jnp.ndarray:
+    def sample_deterministic(self, sample_shape=()) -> jnp.ndarray:
         """
         Utility function for "sampling" the determinstic part of the series.
 
         Args:
-            shape: See :meth:`sample`.
+            sample_shape: See :meth:`sample`.
 
         Returns:
             Returns samples.
@@ -267,4 +267,4 @@ class LinearTimeseries(Distribution):
             column_mask=np.zeros_like(self.column_mask),
         )
 
-        return copy.sample(PRNGKey(0), shape)
+        return copy.sample(PRNGKey(0), sample_shape)
