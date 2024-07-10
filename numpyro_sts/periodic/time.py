@@ -32,20 +32,3 @@ class TimeSeasonal(LinearTimeseries):
         mask = np.eye(num_seasons - 1, 1, dtype=np.bool_).squeeze(-1)
 
         super().__init__(n, offset, matrix, std, initial_value, column_mask=mask, **kwargs)
-
-    def constant_seasonal(self) -> jnp.ndarray:
-        """
-        Helper method for "sampling" a constant seasonal series.
-
-        Returns:
-            A :class:`jnp.ndarray`.
-        """
-
-        def body_fn(x_t, _):
-            x_tp1 = self.matrix @ x_t
-
-            return x_tp1, x_tp1
-
-        _, seasonality = scan(body_fn, self.initial_value, jnp.arange(self.n))
-
-        return seasonality
