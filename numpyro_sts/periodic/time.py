@@ -1,7 +1,6 @@
 from numpy.typing import ArrayLike
 import jax.numpy as jnp
 import numpy as np
-from numpyro.contrib.control_flow import scan
 
 from ..base import LinearTimeseries
 from ..util import cast_to_tensor
