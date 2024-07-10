@@ -1,4 +1,4 @@
-from functools import cached_property
+from functools import cached_property, reduce
 
 import jax.numpy as jnp
 import numpy as np
@@ -103,13 +103,19 @@ class LinearTimeseries(Distribution):
 
     def _sample_shocks(self, key, batch_shape) -> jnp.ndarray:
         shock_shape = self.event_shape[:-1] + self._selector.shape[-1:]
-        samples = normal(key, shape=batch_shape + shock_shape)
+
+        # TODO: nicify...
+        flat_shape = ()
+        if batch_shape:
+            size = reduce(lambda u, v: u * v, batch_shape)
+            flat_shape = (size,)
+
+        samples = normal(key, shape=flat_shape + shock_shape)
 
         fun = lambda u, v: (u @ v[..., None]).squeeze(-1)
         selector = self._selector
 
         if batch_shape:
-            samples = samples.reshape((-1,) + shock_shape)
             selector = jnp.broadcast_to(selector, samples.shape[:1] + selector.shape)
             fun = vmap(fun)
 
