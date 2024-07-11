@@ -244,6 +244,23 @@ class LinearTimeseries(Distribution):
 
         return model
 
+    def deterministic(self) -> "LinearTimeseries":
+        """
+        Constructs a deterministic version of the timeseries.
+
+        Returns:
+            A :class:`LinearTimeseries` with column mask set to False.
+        """
+
+        return LinearTimeseries(
+            self.n,
+            self.offset,
+            self.matrix,
+            self.std,
+            self.initial_value,
+            column_mask=np.zeros_like(self.column_mask),
+        )
+
     def sample_deterministic(self, sample_shape=()) -> jnp.ndarray:
         """
         Utility function for "sampling" the deterministic part of the series.
@@ -255,13 +272,4 @@ class LinearTimeseries(Distribution):
             Returns samples.
         """
 
-        copy = LinearTimeseries(
-            self.n,
-            self.offset,
-            self.matrix,
-            self.std,
-            self.initial_value,
-            column_mask=np.zeros_like(self.column_mask),
-        )
-
-        return copy.sample(PRNGKey(0), sample_shape)
+        return self.deterministic().sample(PRNGKey(0), sample_shape)
