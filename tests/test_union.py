@@ -16,3 +16,4 @@ def test_union():
     samples = combined.sample(key)
 
     assert samples.shape == combined.event_shape
+    assert combined.event_shape[-1] == 7
