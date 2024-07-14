@@ -5,4 +5,4 @@ from .random_walk import RandomWalk
 from .smooth_llt import SmoothLocalLinearTrend
 from . import periodic
 
-__version__ = "0.0.3"
+__version__ = "0.1.0"
