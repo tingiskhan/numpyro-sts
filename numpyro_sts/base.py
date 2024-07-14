@@ -276,7 +276,13 @@ class LinearTimeseries(Distribution):
         """
 
         future_model = LinearTimeseries(
-            n, self.offset, self.matrix, self.std, value, std_is_matrix=self._std_is_matrix, column_mask=self.column_mask
+            n,
+            self.offset,
+            self.matrix,
+            self.std,
+            value,
+            std_is_matrix=self._std_is_matrix,
+            column_mask=self.column_mask,
         )
 
         return future_model
