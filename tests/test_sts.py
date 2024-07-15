@@ -97,5 +97,5 @@ def test_constant_model(shape):
     log_prob = model.log_prob(samples)
     assert (log_prob == 0.0).all()
 
-    method_sample = model.sample_deterministic(shape)
+    method_sample = model.deterministic()
     assert (method_sample == samples).all()
