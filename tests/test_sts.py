@@ -74,10 +74,12 @@ def test_models_numpyro_context():
     mcmc.run(key, y.shape[0], y_=y)
 
     samples = mcmc.get_samples()
-    quantiles = np.quantile(samples["std"], [0.001, 0.999])
+    low, high = np.quantile(samples["std"], [0.001, 0.999])
 
-    assert (quantiles[0] <= true_model.std <= quantiles[1]).all()
+    assert (low <= true_model.std <= high).all()
 
+    # NB: this should be fetched from the predictive distribution rather...
+    assert samples["std"].std() <= 1.0
 
 
 @pt.mark.parametrize("shape", [(), (10,)])
