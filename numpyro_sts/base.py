@@ -1,3 +1,4 @@
+import warnings
 from functools import cached_property, reduce
 from typing import Tuple
 
@@ -90,7 +91,12 @@ class LinearTimeseries(Distribution):
         std_is_matrix: bool = False,
         column_mask: np.ndarray = None,
         validate_args=None,
+        **kwargs,
     ):
+        if "mask" in kwargs:
+            warnings.warn("'mask' is deprecated in favor of 'column_mask'", DeprecationWarning)
+            column_mask = kwargs.pop("mask")
+
         _verify_parameters(offset, matrix, std, initial_value, std_is_matrix)
         times = jnp.arange(n)
 
