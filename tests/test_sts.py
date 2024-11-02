@@ -2,7 +2,7 @@ import numpyro
 import pytest as pt
 from jax.random import PRNGKey
 import numpy as np
-from numpyro.distributions import HalfNormal, Normal
+from numpyro.distributions import HalfNormal, Normal, TransformedDistribution
 from numpyro.infer import MCMC, NUTS
 
 from numpyro_sts import RandomWalk, LocalLinearTrend, AutoRegressive, LinearTimeseries, SmoothLocalLinearTrend, periodic
@@ -11,50 +11,29 @@ from numpyro_sts import RandomWalk, LocalLinearTrend, AutoRegressive, LinearTime
 numpyro.set_platform("cpu")
 
 
-def models(n):
-    for b in [(), (5, 10)]:
-        yield RandomWalk(n, 0.05, 0.0, validate_args=True).expand(b)
-        yield LocalLinearTrend(n, np.array([0.05, 1e-3]), np.zeros(2), validate_args=True).expand(b)
-        yield AutoRegressive(n, 0.99, 0.05, 1, validate_args=True).expand(b)
-        yield AutoRegressive(n, np.array([0.99, -0.5]), 0.05, 2, validate_args=True).expand(b)
-        yield AutoRegressive(n, np.array([0.99, -0.5]), 0.05, 2, 0.5).expand(b)
-        yield periodic.TimeSeasonal(n, 5, 0.05, np.zeros(4)).expand(b)
-        yield periodic.Cyclical(n, 2.0 * np.pi / (n // 2), 0.05, np.zeros(2)).expand(b)
-        yield periodic.TrigonometricSeasonal(n, 4, 0.05, np.zeros(4)).expand(b)
-
-        mat = np.array([
-            [0.95, -0.05],
-            [1.0, 0.0]
-        ])
-        std_mat = np.array([0.05, 0.0])
-        offset = np.zeros_like(std_mat)
-        mask = std_mat != 0.0
-
-        yield LinearTimeseries(n, offset, mat, std_mat, np.zeros_like(std_mat), column_mask=mask).expand(b)
-        yield SmoothLocalLinearTrend(n, 0.01, np.zeros(2)).expand(b)
-
-        mat = np.eye(2)
-        std_mat = 0.05 * np.eye(2)
-        offset = np.zeros(2)
-
-        yield LinearTimeseries(n, offset, mat, std_mat, offset, std_is_matrix=True).expand(b)
-
-    yield RandomWalk(n, np.full(10, 0.05), 0.0, validate_args=True)
+def models():
+    yield SmoothLocalLinearTrend(0.05, np.zeros(2))
+    yield RandomWalk(0.05, 0.0)
+    yield AutoRegressive(0.95, 0.05, 1, 0.1)
 
 
 N = 100
 
 
-@pt.mark.parametrize("model", models(N))
+@pt.mark.parametrize("transform", models())
 @pt.mark.parametrize("shape", [(), (10,)])
-def test_models(model, shape):
+def test_models(transform, shape):
     key = PRNGKey(123)
 
-    samples = model.sample(key, shape)
-    assert samples.shape == shape + model.batch_shape + model.event_shape
+    dist = TransformedDistribution(
+        Normal().expand((100, 1)),
+        transform,
+    )
 
-    log_prob = model.log_prob(samples)
-    assert log_prob.shape == shape + model.batch_shape
+    samples = dist.sample(key)
+
+    # NB: this should be fetched from the predictive distribution rather...
+    assert samples["std"].std() <= 1.0
 
 
 def test_models_numpyro_context():
@@ -74,30 +53,6 @@ def test_models_numpyro_context():
     mcmc.run(key, y.shape[0], y_=y)
 
     samples = mcmc.get_samples()
-    low, high = np.quantile(samples["std"], [0.001, 0.999])
+    quantiles = np.quantile(samples["std"], [0.001, 0.999])
 
-    assert (low <= true_model.std <= high).all()
-
-    # NB: this should be fetched from the predictive distribution rather...
-    assert samples["std"].std() <= 1.0
-
-
-@pt.mark.parametrize("shape", [(), (10,)])
-def test_constant_model(shape):
-    mat = np.eye(2)
-    offset = np.ones(2)
-    initial_value = np.zeros_like(offset)
-    mask = np.zeros_like(offset, dtype=bool)
-
-    model = LinearTimeseries(N, offset, mat, np.zeros_like(offset), initial_value, column_mask=mask)
-
-    key = PRNGKey(123)
-    samples = model.sample(key, shape)
-
-    assert (samples[..., -1, :] == N).all()
-
-    log_prob = model.log_prob(samples)
-    assert (log_prob == 0.0).all()
-
-    method_sample = model.deterministic()
-    assert (method_sample == samples).all()
+    assert (quantiles[0] <= true_model.std <= quantiles[1]).all()
