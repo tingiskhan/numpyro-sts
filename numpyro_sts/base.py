@@ -250,7 +250,7 @@ class LinearTimeseries(Distribution):
 
         return model
 
-    def deterministic(self) -> jnp.ndarray:
+    def deterministic(self) -> "LinearTimeseries":
         """
         Constructs a deterministic version of the timeseries.
 
