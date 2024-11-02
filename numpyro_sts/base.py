@@ -123,7 +123,7 @@ class LinearTimeseries(RecursiveLinearTransform):
             return prev, x_tp1
 
         _, x = lax.scan(f, y[-1], jnp.roll(y, 1, axis=0).at[0].set(self.initial_value), reverse=True)
-        return jnp.moveaxis(x, 0, -2)
+        return jnp.moveaxis(x[..., self.mask], 0, -2)
 
     def log_abs_det_jacobian(self, x: jnp.ndarray, y: jnp.ndarray, intermediates=None):
         return jnp.zeros_like(x, shape=x.shape[:-2])
