@@ -67,7 +67,7 @@ class LinearTimeseries(Distribution):
     """
 
     pytree_data_fields = ("offset", "matrix", "std", "initial_value")
-    pytree_aux_fields = ("n", "_std_is_matrix", "column_mask")
+    pytree_aux_fields = ("n", "_std_is_matrix", "column_mask", "selector")
 
     support = constraints.real_matrix
     has_enumerate_support = False
@@ -123,10 +123,7 @@ class LinearTimeseries(Distribution):
             column_mask = np.ones(self.event_shape[-1], dtype=np.bool_)
 
         self.column_mask = column_mask
-
-    @cached_property
-    def _selector(self) -> jnp.ndarray:
-        return jnp.eye(self.event_shape[-1])[..., self.column_mask]
+        self.selector = np.eye(self.event_shape[-1])[..., self.column_mask]
 
     def sample(self, key, sample_shape=()):
         assert is_prng_key(key)
@@ -140,7 +137,7 @@ class LinearTimeseries(Distribution):
 
         batch_shape = sample_shape + self.batch_shape
 
-        shocks = _sample_shocks(key, self.event_shape, batch_shape, self._selector)
+        shocks = _sample_shocks(key, self.event_shape, batch_shape, self.selector)
         inits = jnp.broadcast_to(self.initial_value, sample_shape + self.initial_value.shape)
 
         batch_dim = len(batch_shape)
@@ -168,7 +165,7 @@ class LinearTimeseries(Distribution):
         matrix = self.matrix
         std = self.std
 
-        selector = self._selector
+        selector = self.selector
         inverse_fun = jnp.matmul
 
         if sample_shape:
