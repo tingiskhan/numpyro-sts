@@ -274,11 +274,11 @@ class LinearTimeseries(Distribution):
         Creates a "prediction" instance of self.
 
         Args:
-            n:
-            value:
+            n: Number of future predictions.
+            value: New start value.
 
         Returns:
-
+            Returns new instance of :class:`LinearTimeseries`.
         """
 
         future_model = LinearTimeseries(
