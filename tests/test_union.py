@@ -15,5 +15,9 @@ def test_union():
     key = jrnd.PRNGKey(123)
     samples = combined.sample(key)
 
+    log_prob = combined.log_prob(samples)
+
     assert samples.shape == combined.event_shape
     assert combined.event_shape[-1] == 7
+
+
