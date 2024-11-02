@@ -97,18 +97,18 @@ class LinearTimeseries(RecursiveLinearTransform):
 
         super().__init__(transition_matrix=matrix)
 
-    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
-        x = jnp.einsum("...j,kj->...k", jnp.moveaxis(x, -2, 0), self.selector)
+    def __call__(self, eps: jnp.ndarray) -> jnp.ndarray:
+        eps = jnp.einsum("...j,kj->...k", jnp.moveaxis(eps, -2, 0), self.selector)
 
         if not self._std_is_matrix:
-            x *= self.std
+            eps = eps * self.std
 
-        def f(y_t, x_tp1):
-            y_t = jnp.einsum("...ij,...j->...i", self.transition_matrix, y_t) + x_tp1 + self.offset
-            return y_t, y_t
+        def f(x_t, eps_tp1):
+            x_t = jnp.einsum("...ij,...j->...i", self.transition_matrix, x_t) + eps_tp1 + self.offset
+            return x_t, x_t
 
-        _, y = lax.scan(f, self.initial_value, x)
-        return jnp.moveaxis(y, 0, -2)
+        _, x = lax.scan(f, self.initial_value, eps)
+        return jnp.moveaxis(x, 0, -2)
 
     def _inverse(self, y: jnp.ndarray) -> jnp.ndarray:
         # Move the time axis to the first position so we can scan over it in reverse.
@@ -118,12 +118,14 @@ class LinearTimeseries(RecursiveLinearTransform):
             x_t = y_t - jnp.einsum("...ij,...j->...i", self.transition_matrix, prev) - self.offset
 
             if not self._std_is_matrix:
-                x_t /= self.std
+                eps_t = x_t / self.std
+            else:
+                eps_t = jnp.linalg.solve(self.std, x_t)
 
-            return prev, x_t
+            return prev, eps_t
 
-        _, x = lax.scan(f, y[-1], jnp.roll(y, 1, axis=0).at[0].set(self.initial_value), reverse=True)
-        return jnp.moveaxis(x[..., self.mask], 0, -2)
+        _, eps = lax.scan(f, y[-1], jnp.roll(y, 1, axis=0).at[0].set(self.initial_value), reverse=True)
+        return jnp.moveaxis(eps[..., self.mask], 0, -2)
 
     def log_abs_det_jacobian(self, x: jnp.ndarray, y: jnp.ndarray, intermediates=None):
         return jnp.zeros_like(x, shape=x.shape[:-2])
