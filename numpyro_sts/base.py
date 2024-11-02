@@ -267,7 +267,7 @@ class LinearTimeseries(Distribution):
             column_mask=np.zeros_like(self.column_mask),
         )
 
-        return model.sample(PRNGKey(0))
+        return model
 
     def predict(self, n: int, value: jnp.ndarray) -> "LinearTimeseries":
         """
