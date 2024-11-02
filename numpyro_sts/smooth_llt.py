@@ -15,7 +15,7 @@ class SmoothLocalLinearTrend(LinearTimeseries):
         initial_value: Initial value of random walks.
     """
 
-    def __init__(self, n: int, std: ArrayLike, initial_value: ArrayLike, **kwargs):
+    def __init__(self, std: ArrayLike, initial_value: ArrayLike):
         (initial_value,) = promote_shapes(initial_value, shape=(2,))
 
         (std,) = promote_shapes(std, shape=(1,))
@@ -24,6 +24,5 @@ class SmoothLocalLinearTrend(LinearTimeseries):
         matrix = jnp.array([[1.0, 1.0], [0.0, 1.0]])
         offset = jnp.zeros_like(initial_value)
 
-        column_mask = np.array([False, True])
-
-        super().__init__(n, offset, matrix, std, initial_value, column_mask=column_mask, **kwargs)
+        mask = np.array([0, 1], dtype=bool)
+        super().__init__(offset, matrix, std, initial_value, mask=mask)

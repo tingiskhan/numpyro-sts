@@ -13,7 +13,7 @@ class TrigonometricSeasonal(LinearTimeseries):
         periodicity: Periodicity of component.
     """
 
-    def __init__(self, n: int, num_seasons: int, std: ArrayLike, initial_value: ArrayLike, **kwargs):
+    def __init__(self, num_seasons: int, std: ArrayLike, initial_value: ArrayLike, **kwargs):
         half_seasons = num_seasons // 2
         lamda = 2.0 * jnp.pi * jnp.arange(1, half_seasons + 1) / num_seasons
 
@@ -30,4 +30,4 @@ class TrigonometricSeasonal(LinearTimeseries):
         offset = jnp.zeros(2 * half_seasons)
         std = jnp.full_like(offset, std)
 
-        super().__init__(n, offset, matrix, std, initial_value, **kwargs)
+        super().__init__(offset, matrix, std, initial_value, **kwargs)

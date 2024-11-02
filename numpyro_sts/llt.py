@@ -14,11 +14,11 @@ class LocalLinearTrend(LinearTimeseries):
         initial_value: Initial value of random walks.
     """
 
-    def __init__(self, n: int, std: ArrayLike, initial_value: ArrayLike, drift: ArrayLike = None, **kwargs):
+    def __init__(self, std: ArrayLike, initial_value: ArrayLike, drift: ArrayLike = None, **kwargs):
         if drift is None:
             drift = np.zeros_like(initial_value)
 
         std, initial_value, drift = promote_shapes(std, initial_value, drift, shape=(2,))
         matrix = np.array([[1.0, 1.0], [0.0, 1.0]])
 
-        super().__init__(n, drift, matrix, std, initial_value, **kwargs)
+        super().__init__(drift, matrix, std, initial_value, **kwargs)

@@ -13,7 +13,7 @@ class Cyclical(LinearTimeseries):
         periodicity: Periodicity of component.
     """
 
-    def __init__(self, n: int, periodicity: ArrayLike, std: ArrayLike, initial_value: ArrayLike, **kwargs):
+    def __init__(self, periodicity: ArrayLike, std: ArrayLike, initial_value: ArrayLike, **kwargs):
         (lamda,) = cast_to_tensor(periodicity)
 
         cos_lamda = jnp.cos(lamda)
@@ -26,4 +26,4 @@ class Cyclical(LinearTimeseries):
         offset = jnp.zeros(2)
         std = jnp.full_like(offset, std)
 
-        super().__init__(n, offset, matrix, std, initial_value, **kwargs)
+        super().__init__(offset, matrix, std, initial_value, **kwargs)

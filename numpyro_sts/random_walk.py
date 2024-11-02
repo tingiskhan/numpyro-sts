@@ -16,7 +16,7 @@ class RandomWalk(LinearTimeseries):
         drift: Drift of process. Defaults to 0.
     """
 
-    def __init__(self, n, std, initial_value, drift: ArrayLike = 0.0, **kwargs):
+    def __init__(self, std, initial_value, drift: ArrayLike = 0.0, **kwargs):
         arrays = cast_to_tensor(drift, std, initial_value)
 
         arrays = np.broadcast_arrays(*arrays)
@@ -24,4 +24,4 @@ class RandomWalk(LinearTimeseries):
 
         matrix = np.ones((1, 1))
 
-        super().__init__(n, offset, matrix, std, initial_value, **kwargs)
+        super().__init__(offset, matrix, std, initial_value, **kwargs)

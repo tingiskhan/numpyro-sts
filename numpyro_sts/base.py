@@ -4,10 +4,11 @@ from typing import Tuple
 
 import jax.numpy as jnp
 import numpy as np
-from jax import vmap
+from jax import vmap, lax
 from jax.random import normal, PRNGKey
 from numpyro.contrib.control_flow import scan
 from numpyro.distributions import Distribution, Normal, constraints, MultivariateNormal
+from numpyro.distributions.transforms import RecursiveLinearTransform
 from numpyro.distributions.util import validate_sample
 from numpyro.util import is_prng_key
 from jax.typing import ArrayLike
@@ -54,7 +55,7 @@ def _verify_parameters(offset, matrix, std, initial_value, std_is_matrix):
         assert std.ndim >= 2 and std.shape[-1] == std.shape[-2] == ndim
 
 
-class LinearTimeseries(Distribution):
+class LinearTimeseries(RecursiveLinearTransform):
     r"""
     Defines a base model for linear stochastic models with Gaussian increments.
 
@@ -63,53 +64,27 @@ class LinearTimeseries(Distribution):
         matrix: Matrix of linear combination of states. Of size :math:`[batch size] \times dimension \times dimension`.
         std: Standard deviation of innovations. Of size :math:`[batch size] \times dimension`.
         initial_value: Initial value of the time series. Of size :math:`[batch size] \times dimension`.
-        column_mask: Mask for constructing the "selector" matrix.
     """
-
-    pytree_data_fields = ("offset", "matrix", "std", "initial_value")
-    pytree_aux_fields = ("n", "_std_is_matrix", "column_mask", "selector")
-
-    support = constraints.real_matrix
-    has_enumerate_support = False
-
-    arg_constraints = {
-        "offset": constraints.real_vector,
-        "matrix": constraints.real_matrix,
-        "std": constraints.real_vector,
-        "initial_value": constraints.real_vector,
-        "n": constraints.positive_integer,
-    }
 
     def __init__(
         self,
-        n: int,
         offset: ArrayLike,
         matrix: ArrayLike,
         std: ArrayLike,
         initial_value: ArrayLike,
         *,
         std_is_matrix: bool = False,
-        column_mask: np.ndarray = None,
-        validate_args=None,
-        **kwargs,
+        mask: np.ndarray = None,
     ):
-        if "mask" in kwargs:
-            warnings.warn("'mask' is deprecated in favor of 'column_mask'", DeprecationWarning)
-            column_mask = kwargs.pop("mask")
-
         _verify_parameters(offset, matrix, std, initial_value, std_is_matrix)
-        times = jnp.arange(n)
-
         self._std_is_matrix = std_is_matrix
 
-        event_shape = times.shape + initial_value.shape[-1:]
         batch_shape = jnp.broadcast_shapes(
             offset.shape[:-1], matrix.shape[:-2], std.shape[: -(1 + int(self._std_is_matrix))], initial_value.shape[:-1]
         )
 
         parameter_shape = batch_shape + initial_value.shape[-1:]
 
-        self.n = n
         self.offset = jnp.broadcast_to(offset, parameter_shape)
         self.initial_value = jnp.broadcast_to(initial_value, parameter_shape)
         self.matrix = jnp.broadcast_to(matrix, parameter_shape + initial_value.shape[-1:])
@@ -117,107 +92,51 @@ class LinearTimeseries(Distribution):
         std_shape = parameter_shape if not self._std_is_matrix else parameter_shape + initial_value.shape[-1:]
         self.std = jnp.broadcast_to(std, std_shape)
 
-        super().__init__(batch_shape=batch_shape, event_shape=event_shape, validate_args=validate_args)
+        self.mask = (mask if mask is not None else np.ones(self.matrix.shape[-1])).astype(bool)
+        self.selector = np.eye(self.matrix.shape[-1])[:, mask]
 
-        if column_mask is None:
-            column_mask = np.ones(self.event_shape[-1], dtype=np.bool_)
+        super().__init__(transition_matrix=matrix)
 
-        self.column_mask = column_mask
-        self.selector = np.eye(self.event_shape[-1])[..., self.column_mask]
-
-    def sample(self, key, sample_shape=()):
-        assert is_prng_key(key)
-
-        def body(state, eps_tp1):
-            x_tp1 = self.sample_from_shock(state, eps_tp1)
-            return x_tp1, x_tp1
-
-        def scan_fn(init, noise):
-            return scan(body, init, noise)
-
-        batch_shape = sample_shape + self.batch_shape
-
-        shocks = _sample_shocks(key, self.event_shape, batch_shape, self.selector)
-        inits = jnp.broadcast_to(self.initial_value, sample_shape + self.initial_value.shape)
-
-        batch_dim = len(batch_shape)
-        if batch_dim:
-            shocks = jnp.moveaxis(shocks, -2, 0)
-            _, samples = scan_fn(inits, shocks)
-
-            return jnp.moveaxis(samples, 0, -2)
-
-        return scan_fn(inits, shocks)[-1]
-
-    @validate_sample
-    def log_prob(self, value):
-        # NB: very similar to numpyro's implementation of EulerMaruyama
-        sample_shape = jnp.broadcast_shapes(value.shape[: -self.event_dim], self.batch_shape)
-        value = jnp.broadcast_to(value, sample_shape + self.event_shape)
-
-        initial_value = jnp.expand_dims(self.initial_value, -2)
-        initial_value = jnp.broadcast_to(initial_value, sample_shape + initial_value.shape[-2:])
-
-        stacked = jnp.concatenate([initial_value, value], axis=-2)
-        loc_fun = _loc_transition
-
-        offset = self.offset
-        matrix = self.matrix
-        std = self.std
-
-        selector = self.selector
-        inverse_fun = jnp.matmul
-
-        if sample_shape:
-            stacked = stacked.reshape((-1,) + stacked.shape[-2:])
-
-            offset = _broadcast_and_reshape(offset, sample_shape, -1)
-            matrix = _broadcast_and_reshape(matrix, sample_shape, -2)
-            std = _broadcast_and_reshape(std, sample_shape, -2 if self._std_is_matrix else -1)
-
-            selector = jnp.broadcast_to(selector, stacked.shape[:1] + selector.shape)
-
-            loc_fun = vmap(_loc_transition)
-            inverse_fun = vmap(inverse_fun)
-
-        x_tm1 = stacked[..., :-1, :]
-        x_t = stacked[..., 1:, :]
-
-        loc = loc_fun(x_tm1, offset, matrix)
-
-        transposed_selector = selector.swapaxes(-1, -2)
-        loc = inverse_fun(transposed_selector, loc[..., None]).squeeze(-1)
-        x_t = inverse_fun(transposed_selector, x_t[..., None]).squeeze(-1)
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        x = jnp.einsum("...j,kj->...k", jnp.moveaxis(x, -2, 0), self.selector)
 
         if not self._std_is_matrix:
-            std = inverse_fun(transposed_selector, std[..., None]).swapaxes(-1, -2)
-            dist = Normal(loc, std).to_event(2)
-        else:
-            std = inverse_fun(transposed_selector, std)
-            std = jnp.expand_dims(std, -3)
+            x *= self.std
 
-            dist = MultivariateNormal(loc, scale_tril=std).to_event(1)
+        def f(y_t, x_tp1):
+            y_t = jnp.einsum("...ij,...j->...i", self.transition_matrix, y_t) + x_tp1 + self.offset
+            return y_t, y_t
 
-        return dist.log_prob(x_t).reshape(sample_shape)
+        _, y = lax.scan(f, self.initial_value, x)
+        return jnp.moveaxis(y, 0, -2)
 
-    def sample_from_shock(self, x_t, eps_t: jnp.ndarray) -> jnp.ndarray:
-        """
-        Samples the distribution conditioned on shocks.
+    def _inverse(self, y: jnp.ndarray) -> jnp.ndarray:
+        # Move the time axis to the first position so we can scan over it in reverse.
+        y = jnp.moveaxis(y, -2, 0)
 
-        Args:
-            x_t: Current state.
-            eps_t: The shocks to use.
+        def f(y_t, prev):
+            x_tp1 = y_t - jnp.einsum("...ij,...j->...i", self.transition_matrix, prev) - self.offset
 
-        Returns:
-            Returns sampled process.
-        """
+            if not self._std_is_matrix:
+                x_tp1 /= self.std
 
-        loc = _loc_transition(x_t, self.offset, self.matrix)
+            return prev, x_tp1
 
-        if not self._std_is_matrix:
-            return loc + self.std * eps_t
+        _, x = lax.scan(f, y[-1], jnp.roll(y, 1, axis=0).at[0].set(self.initial_value), reverse=True)
+        return jnp.moveaxis(x, 0, -2)
 
-        return loc + (self.std @ eps_t[..., None]).squeeze(-1)
+    def log_abs_det_jacobian(self, x: jnp.ndarray, y: jnp.ndarray, intermediates=None):
+        return jnp.zeros_like(x, shape=x.shape[:-2])
+
+    def tree_flatten(self):
+        params = (self.transition_matrix, self.offset, self.initial_value, self.std)
+        param_names = ("transition_matrix", "offset", "initial_value", "std")
+        aux_data = {"std_is_matrix": self._std_is_matrix, "mask": self.mask}
+
+        return params, (param_names, aux_data)
+
+    def __eq__(self, other):
+        raise NotImplementedError()
 
     def union(self, other: "LinearTimeseries") -> "LinearTimeseries":
         """
@@ -230,48 +149,26 @@ class LinearTimeseries(Distribution):
             Returns a new instance of :class:`LinearTimeseries`.
         """
 
-        assert self.n == other.n, "Number of steps do not match!"
-        batch_shape = jnp.broadcast_shapes(self.batch_shape, other.batch_shape)
-
-        assert not batch_shape, "Currently does not support batch shapes!"
-
         matrix = linalg.block_diag(self.matrix, other.matrix)
         offset = jnp.concatenate([self.offset, other.offset], axis=-1)
         initial_value = jnp.concatenate([self.initial_value, other.initial_value], axis=-1)
 
         # TODO: fix other ones as well
+        if any([self._std_is_matrix, other._std_is_matrix]):
+            raise NotImplementedError("Do not handle matrix!")
+
         std = jnp.concatenate([self.std, other.std], axis=-1)
-        mask = np.concatenate([self.column_mask, other.column_mask], axis=-1)
+        mask = np.concatenate([self.mask, other.mask], axis=-1)
 
-        model = LinearTimeseries(self.n, offset, matrix, std, initial_value, column_mask=mask, std_is_matrix=False)
-
-        return model
-
-    def deterministic(self) -> "LinearTimeseries":
-        """
-        Constructs a deterministic version of the timeseries.
-
-        Returns:
-            A :class:`LinearTimeseries` with column mask set to False.
-        """
-
-        model = LinearTimeseries(
-            self.n,
-            self.offset,
-            self.matrix,
-            self.std,
-            self.initial_value,
-            column_mask=np.zeros_like(self.column_mask),
-        )
+        model = LinearTimeseries(offset, matrix, std, initial_value, std_is_matrix=False, mask=mask)
 
         return model
 
-    def predict(self, n: int, value: jnp.ndarray) -> "LinearTimeseries":
+    def predict(self, value: jnp.ndarray) -> "LinearTimeseries":
         """
         Creates a "prediction" instance of self.
 
         Args:
-            n: Number of future predictions.
             value: New start value.
 
         Returns:
@@ -279,13 +176,34 @@ class LinearTimeseries(Distribution):
         """
 
         future_model = LinearTimeseries(
-            n,
             self.offset,
             self.matrix,
             self.std,
             value,
             std_is_matrix=self._std_is_matrix,
-            column_mask=self.column_mask,
+            mask=self.mask,
         )
 
         return future_model
+
+    def deterministic(self) -> "LinearTimeseries":
+        """
+        Constructs a deterministic version of the series.
+
+        Notes:
+            Only use deterministic models in conjunction with non-deterministic models.
+
+        Returns:
+            Instance of :class:`LinearTimeseries`.
+        """
+
+        model = LinearTimeseries(
+            self.offset,
+            self.matrix,
+            self.std,
+            self.initial_value,
+            std_is_matrix=self._std_is_matrix,
+            mask=np.zeros_like(self.mask),
+        )
+
+        return model
