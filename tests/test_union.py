@@ -16,13 +16,20 @@ def test_union():
 
     key = jrnd.PRNGKey(123)
 
-    distribution = TransformedDistribution(
-        Normal().expand((100, 3)),
-        combined,
-    )
+    base = Normal().expand((n, 3))
+    samples = base.sample(key)
 
-    samples = distribution.sample(key)
-    log_prob = distribution.log_prob(samples)
+    transformed = combined(samples)
+    inverse = combined._inverse(transformed)
 
-    assert samples.shape == combined.event_shape
-    assert combined.event_shape[-1] == 7
+    assert transformed.shape == (n, 7)
+    assert inverse.shape == base.batch_shape
+
+    assert np.allclose(samples, inverse, rtol=1e-5, atol=1e-6)
+
+    distribution = TransformedDistribution(base, combined)
+
+    log_prob = distribution.log_prob(transformed)
+    base_prob = base.to_event(2).log_prob(samples)
+
+    assert np.allclose(log_prob, base_prob)
