@@ -115,12 +115,12 @@ class LinearTimeseries(RecursiveLinearTransform):
         y = jnp.moveaxis(y, -2, 0)
 
         def f(y_t, prev):
-            x_tp1 = y_t - jnp.einsum("...ij,...j->...i", self.transition_matrix, prev) - self.offset
+            x_t = y_t - jnp.einsum("...ij,...j->...i", self.transition_matrix, prev) - self.offset
 
             if not self._std_is_matrix:
-                x_tp1 /= self.std
+                x_t /= self.std
 
-            return prev, x_tp1
+            return prev, x_t
 
         _, x = lax.scan(f, y[-1], jnp.roll(y, 1, axis=0).at[0].set(self.initial_value), reverse=True)
         return jnp.moveaxis(x[..., self.mask], 0, -2)
@@ -131,9 +131,15 @@ class LinearTimeseries(RecursiveLinearTransform):
     def tree_flatten(self):
         params = (self.transition_matrix, self.offset, self.initial_value, self.std)
         param_names = ("transition_matrix", "offset", "initial_value", "std")
-        aux_data = {"std_is_matrix": self._std_is_matrix, "mask": self.mask}
+        aux_data = {"std_is_matrix": self._std_is_matrix, "mask": self.mask, "selector": self.selector}
 
         return params, (param_names, aux_data)
+
+    def forward_shape(self, shape):
+        return shape[:-1] + self.selector.shape[:-1]
+
+    def inverse_shape(self, shape):
+        return shape[:-1] + self.selector.shape[1:]
 
     def __eq__(self, other):
         raise NotImplementedError()
