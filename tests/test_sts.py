@@ -5,7 +5,10 @@ import numpy as np
 from numpyro.distributions import HalfNormal, Normal
 from numpyro.infer import MCMC, NUTS
 
-from numpyro_sts import RandomWalk, LocalLinearTrend, AutoRegressive, LinearTimeseries, SmoothLocalLinearTrend
+from numpyro_sts import RandomWalk, LocalLinearTrend, AutoRegressive, LinearTimeseries, SmoothLocalLinearTrend, periodic
+
+
+numpyro.set_platform("cpu")
 
 
 def models(n):
@@ -15,6 +18,9 @@ def models(n):
         yield AutoRegressive(n, 0.99, 0.05, 1, validate_args=True).expand(b)
         yield AutoRegressive(n, np.array([0.99, -0.5]), 0.05, 2, validate_args=True).expand(b)
         yield AutoRegressive(n, np.array([0.99, -0.5]), 0.05, 2, 0.5).expand(b)
+        yield periodic.TimeSeasonal(n, 5, 0.05, np.zeros(4)).expand(b)
+        yield periodic.Cyclical(n, 2.0 * np.pi / (n // 2), 0.05, np.zeros(2)).expand(b)
+        yield periodic.TrigonometricSeasonal(n, 4, 0.05, np.zeros(4)).expand(b)
 
         mat = np.array([
             [0.95, -0.05],
@@ -22,9 +28,9 @@ def models(n):
         ])
         std_mat = np.array([0.05, 0.0])
         offset = np.zeros_like(std_mat)
-        mask = np.array([True, False])
+        mask = std_mat != 0.0
 
-        yield LinearTimeseries(n, offset, mat, std_mat, np.zeros_like(std_mat), mask=mask).expand(b)
+        yield LinearTimeseries(n, offset, mat, std_mat, np.zeros_like(std_mat), column_mask=mask).expand(b)
         yield SmoothLocalLinearTrend(n, 0.01, np.zeros(2)).expand(b)
 
         mat = np.eye(2)
@@ -68,6 +74,30 @@ def test_models_numpyro_context():
     mcmc.run(key, y.shape[0], y_=y)
 
     samples = mcmc.get_samples()
-    quantiles = np.quantile(samples["std"], [0.001, 0.999])
+    low, high = np.quantile(samples["std"], [0.001, 0.999])
 
-    assert (quantiles[0] <= true_model.std <= quantiles[1]).all()
+    assert (low <= true_model.std <= high).all()
+
+    # NB: this should be fetched from the predictive distribution rather...
+    assert samples["std"].std() <= 1.0
+
+
+@pt.mark.parametrize("shape", [(), (10,)])
+def test_constant_model(shape):
+    mat = np.eye(2)
+    offset = np.ones(2)
+    initial_value = np.zeros_like(offset)
+    mask = np.zeros_like(offset, dtype=bool)
+
+    model = LinearTimeseries(N, offset, mat, np.zeros_like(offset), initial_value, column_mask=mask)
+
+    key = PRNGKey(123)
+    samples = model.sample(key, shape)
+
+    assert (samples[..., -1, :] == N).all()
+
+    log_prob = model.log_prob(samples)
+    assert (log_prob == 0.0).all()
+
+    method_sample = model.deterministic()
+    assert (method_sample == samples).all()

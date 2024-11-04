@@ -40,7 +40,6 @@ class AutoRegressive(LinearTimeseries):
             offset = mu * (1.0 - phi.squeeze(-1))
 
         init = jnp.reshape(initial_value if initial_value is not None else jnp.zeros(order), batch_shape + (order,))
+        mask = np.eye(order, 1, dtype=np.bool_).squeeze(-1)
 
-        mask = np.array([True] + (order - 1) * [False], dtype=jnp.bool_)
-
-        super().__init__(n, offset, phi, std, init, mask=mask, **kwargs)
+        super().__init__(n, offset, phi, std, init, column_mask=mask, **kwargs)
