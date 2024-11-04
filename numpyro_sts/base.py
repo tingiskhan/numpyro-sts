@@ -1,5 +1,5 @@
 import warnings
-from functools import cached_property, reduce
+from functools import reduce
 from typing import Tuple
 
 import jax.numpy as jnp
