@@ -8,7 +8,7 @@ def test_union():
 
     llt = LocalLinearTrend(n, np.array([0.05, 1e-3]), np.zeros(2))
     ar = AutoRegressive(n, 0.99, 0.05, 1)
-    seasonal = periodic.TimeSeasonal(n, 5, 0.05, np.zeros(4)).deterministic()
+    seasonal = periodic.TimeSeasonal(n, 5, 0.05, np.zeros(4))
 
     combined = llt.union(ar).union(seasonal)
 
