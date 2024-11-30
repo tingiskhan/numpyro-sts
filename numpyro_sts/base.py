@@ -145,24 +145,3 @@ class LinearTimeseries(RecursiveLinearTransform):
         )
 
         return future_model
-
-    def deterministic(self) -> "LinearTimeseries":
-        """
-        Constructs a deterministic version of the series.
-
-        Notes:
-            Only use deterministic models in conjunction with non-deterministic models.
-
-        Returns:
-            Instance of :class:`LinearTimeseries`.
-        """
-
-        model = LinearTimeseries(
-            self.offset,
-            self.matrix,
-            self.std,
-            self.initial_value,
-            std_is_matrix=self._std_is_matrix,
-        )
-
-        return model
