@@ -1,45 +1,8 @@
-import warnings
-from functools import cached_property, reduce
-from typing import Tuple
-
 import jax.numpy as jnp
-import numpy as np
-from jax import vmap, lax
-from jax.random import normal, PRNGKey
-from numpyro.contrib.control_flow import scan
-from numpyro.distributions import Distribution, Normal, constraints, MultivariateNormal
+from jax import lax
 from numpyro.distributions.transforms import RecursiveLinearTransform
-from numpyro.distributions.util import validate_sample
-from numpyro.util import is_prng_key
 from jax.typing import ArrayLike
 import jax.scipy.linalg as linalg
-
-
-def _broadcast_and_reshape(x: jnp.ndarray, shape, dim: int) -> jnp.ndarray:
-    last_dims = x.shape[dim:]
-    return jnp.broadcast_to(x, shape + last_dims).reshape((-1,) + last_dims)
-
-
-def _loc_transition(state, offset, matrix) -> jnp.ndarray:
-    return offset + (matrix @ state[..., None]).reshape(state.shape)
-
-
-def _sample_shocks(
-    key: PRNGKey, event_shape: Tuple[int, ...], batch_shape: Tuple[int, ...], selector: jnp.ndarray
-) -> jnp.ndarray:
-    shock_shape = event_shape[:-1] + selector.shape[-1:]
-
-    flat_shape = () if not batch_shape else (reduce(lambda u, v: u * v, batch_shape),)
-    samples = normal(key, shape=flat_shape + shock_shape)
-
-    fun = jnp.matmul
-    if batch_shape:
-        selector = jnp.broadcast_to(selector, samples.shape[:1] + selector.shape)
-        fun = vmap(fun)
-
-    rotated_samples = fun(selector, samples[..., None]).squeeze(-1)
-
-    return rotated_samples.reshape(batch_shape + event_shape)
 
 
 def _verify_parameters(offset, matrix, std, initial_value, std_is_matrix):
@@ -74,7 +37,6 @@ class LinearTimeseries(RecursiveLinearTransform):
         initial_value: ArrayLike,
         *,
         std_is_matrix: bool = False,
-        mask: np.ndarray = None,
     ):
         _verify_parameters(offset, matrix, std, initial_value, std_is_matrix)
         self._std_is_matrix = std_is_matrix
@@ -91,23 +53,22 @@ class LinearTimeseries(RecursiveLinearTransform):
 
         std_shape = parameter_shape if not self._std_is_matrix else parameter_shape + initial_value.shape[-1:]
         self.std = jnp.broadcast_to(std, std_shape)
-
-        self.mask = (mask if mask is not None else np.ones(self.matrix.shape[-1])).astype(bool)
-        self.selector = np.eye(self.matrix.shape[-1])[:, mask]
-
         super().__init__(transition_matrix=matrix)
 
     def __call__(self, eps: jnp.ndarray) -> jnp.ndarray:
-        eps = jnp.einsum("...j,kj->...k", jnp.moveaxis(eps, -2, 0), self.selector)
-
         if not self._std_is_matrix:
             eps = eps * self.std
+        else:
+            eps = eps @ self.std.T
 
         def f(x_t, eps_tp1):
-            x_t = jnp.einsum("...ij,...j->...i", self.transition_matrix, x_t) + eps_tp1 + self.offset
-            return x_t, x_t
+            mu_tp1 = jnp.einsum("...ij,...j->...i", self.transition_matrix, x_t)
+            x_tp1 = mu_tp1 + eps_tp1 + self.offset
+
+            return x_tp1, x_tp1
 
         _, x = lax.scan(f, self.initial_value, eps)
+
         return jnp.moveaxis(x, 0, -2)
 
     def _inverse(self, y: jnp.ndarray) -> jnp.ndarray:
@@ -125,7 +86,7 @@ class LinearTimeseries(RecursiveLinearTransform):
             return prev, eps_t
 
         _, eps = lax.scan(f, y[-1], jnp.roll(y, 1, axis=0).at[0].set(self.initial_value), reverse=True)
-        return jnp.moveaxis(eps[..., self.mask], 0, -2)
+        return jnp.moveaxis(eps, 0, -2)
 
     def log_abs_det_jacobian(self, x: jnp.ndarray, y: jnp.ndarray, intermediates=None):
         return jnp.zeros_like(x, shape=x.shape[:-2])
@@ -133,15 +94,9 @@ class LinearTimeseries(RecursiveLinearTransform):
     def tree_flatten(self):
         params = (self.transition_matrix, self.offset, self.initial_value, self.std)
         param_names = ("transition_matrix", "offset", "initial_value", "std")
-        aux_data = {"std_is_matrix": self._std_is_matrix, "mask": self.mask, "selector": self.selector}
+        aux_data = {"std_is_matrix": self._std_is_matrix}
 
         return params, (param_names, aux_data)
-
-    def forward_shape(self, shape):
-        return shape[:-1] + self.selector.shape[:-1]
-
-    def inverse_shape(self, shape):
-        return shape[:-1] + self.selector.shape[1:]
 
     def __eq__(self, other):
         raise NotImplementedError()
@@ -166,9 +121,7 @@ class LinearTimeseries(RecursiveLinearTransform):
             raise NotImplementedError("Do not handle matrix!")
 
         std = jnp.concatenate([self.std, other.std], axis=-1)
-        mask = np.concatenate([self.mask, other.mask], axis=-1)
-
-        model = LinearTimeseries(offset, matrix, std, initial_value, std_is_matrix=False, mask=mask)
+        model = LinearTimeseries(offset, matrix, std, initial_value, std_is_matrix=False)
 
         return model
 
@@ -189,7 +142,6 @@ class LinearTimeseries(RecursiveLinearTransform):
             self.std,
             value,
             std_is_matrix=self._std_is_matrix,
-            mask=self.mask,
         )
 
         return future_model
@@ -211,7 +163,6 @@ class LinearTimeseries(RecursiveLinearTransform):
             self.std,
             self.initial_value,
             std_is_matrix=self._std_is_matrix,
-            mask=np.zeros_like(self.mask),
         )
 
         return model
