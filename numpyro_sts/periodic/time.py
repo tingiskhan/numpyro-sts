@@ -18,16 +18,14 @@ class TimeSeasonal(LinearTimeseries):
 
     """
 
-    def __init__(self, num_seasons: int, std: ArrayLike, initial_value: ArrayLike, **kwargs):
+    def __init__(self, num_seasons: int, initial_value: ArrayLike, **kwargs):
         top = -jnp.ones([1, num_seasons - 1])
         bottom = jnp.eye(num_seasons - 2, num_seasons - 1)
 
         matrix = jnp.concatenate([top, bottom], axis=-2)
         offset = jnp.zeros_like(top).squeeze(-2)
 
-        std, initial_value = cast_to_tensor(std, initial_value)
-        std = jnp.concatenate([std[..., None], jnp.zeros(num_seasons - 2)], axis=-1)
+        initial_value, = cast_to_tensor(initial_value)
+        std = np.zeros_like(initial_value)
 
-        mask = np.eye(num_seasons - 1, 1, dtype=np.bool_).squeeze(-1)
-
-        super().__init__(offset, matrix, std, initial_value, mask=mask, **kwargs)
+        super().__init__(offset, matrix, std, initial_value, **kwargs)
