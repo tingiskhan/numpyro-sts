@@ -20,7 +20,7 @@ def _verify_parameters(offset, matrix, std, initial_value, std_is_matrix):
 
 class LinearTimeseries(RecursiveLinearTransform):
     r"""
-    Defines a base model for linear stochastic models with Gaussian increments.
+    Defines a base model for linear stochastic models.
 
     Args:
         offset: Constant offset in transition equation. Of size :math:`[batch size] \times dimension`.
